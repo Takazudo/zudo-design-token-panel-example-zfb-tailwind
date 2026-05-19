@@ -59,6 +59,10 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install panel sibling deps and build
+        working-directory: ../zudo-design-token-panel
+        run: pnpm install --frozen-lockfile && pnpm -F @takazudo/zudo-design-token-panel build
+
       # Cache Cargo registry and the compiled zfb binary.
       # Key uses the pinned zfb SHA (Cargo.lock is gitignored in zudo-front-builder).
       # Cold install takes ~3-5 min; warm hits are <5 s.
