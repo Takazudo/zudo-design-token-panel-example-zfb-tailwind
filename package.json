@@ -16,7 +16,8 @@
     "_dev:tokens-bin": "design-token-panel-server --write-root . --routing scaffold.routing.json --port 24686 --allow-origin http://localhost:44328",
     "build": "zfb build",
     "preview": "zfb preview",
-    "typecheck": "zfb check"
+    "typecheck": "zfb check",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@takazudo/zfb": "file:../zfb/packages/zfb",
@@ -27,6 +28,7 @@
     "tailwindcss": "^4.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "^22.0.0",
     "concurrently": "^9.2.1",
     "typescript": "^5.9.3"
