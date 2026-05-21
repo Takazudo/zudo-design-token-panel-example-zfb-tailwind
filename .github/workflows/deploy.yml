@@ -128,12 +128,13 @@ jobs:
       - name: Compute deploy branch slug
         id: branch
         env:
-          GITHUB_HEAD_REF_VAL: ${{ github.head_ref }}
-          GITHUB_REF_NAME_VAL: ${{ github.ref_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
+          # Use pr-<number> as the slug for PRs — Cloudflare Pages truncates branch
+          # alias subdomains to 28 chars, silently breaking the preview URL for any
+          # branch name longer than that. pr-<n> is stable and short.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # Cloudflare Pages branch names cannot contain slashes; replace with hyphens.
-            DEPLOY_BRANCH=$(echo "${GITHUB_HEAD_REF_VAL}" | tr '/' '-')
+            DEPLOY_BRANCH="pr-${PR_NUMBER}"
           else
             DEPLOY_BRANCH="main"
           fi
