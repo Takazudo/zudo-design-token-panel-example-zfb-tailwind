@@ -1,10 +1,10 @@
 {
   "zudo-design-token-panel": {
     "repo": "https://github.com/Takazudo/zudo-design-token-panel.git",
-    "sha": "fcf42a1c93b70df1cde812e47b62921dbd1b564b"
+    "sha": "7341033c8fb29cb36bccd02ecc23fd1a01c856b8"
   },
   "zfb": {
     "repo": "https://github.com/Takazudo/zudo-front-builder.git",
-    "sha": "195be73f6716ab48c0c32a3a464e70126ea94937"
+    "sha": "ceb3febeb99c1a139a4b6457a6cb3ba02476753e"
   }
 }

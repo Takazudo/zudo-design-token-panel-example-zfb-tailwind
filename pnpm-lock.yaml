@@ -49,11 +49,14 @@ packages:
 
   '@takazudo/zfb-runtime@file:../zfb/packages/zfb-runtime':
     resolution: {directory: ../zfb/packages/zfb-runtime, type: directory}
+    engines: {node: '>=22.0.0', pnpm: '>=10.0.0'}
     peerDependencies:
       '@takazudo/zfb': workspace:*
 
   '@takazudo/zfb@file:../zfb/packages/zfb':
     resolution: {directory: ../zfb/packages/zfb, type: directory}
+    engines: {node: '>=22.0.0', pnpm: '>=10.0.0'}
+    hasBin: true
 
   '@takazudo/zudo-design-token-panel@file:../zudo-design-token-panel/packages/zudo-design-token-panel':
     resolution: {directory: ../zudo-design-token-panel/packages/zudo-design-token-panel, type: directory}
