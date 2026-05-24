@@ -1,7 +1,7 @@
 /**
  * Apply-pipeline round-trip spec for the zfb-tailwind example.
  *
- * Exercises the bin sidecar (`design-token-panel-server`) apply endpoint
+ * Exercises the bin sidecar (`zdtp-server`) apply endpoint
  * directly via fetch(), proving the full bin → CSS file rewrite path.
  *
  * Panel-driven Apply is NOT tested here.
@@ -12,14 +12,14 @@
  * a size token like `--zfbtw-radius` and clicking Apply leaves the modal's
  * primary button `aria-disabled="true"` (`isEmpty=true`). A panel-level fix
  * to include non-color overrides in the Apply payload is tracked upstream in
- * the `@takazudo/zudo-design-token-panel` package.
+ * the `@takazudo/zdtp` package.
  *
  * Prerequisites
  * -------------
  *  - zfb preview server on port 4173 (started by playwright.config.ts webServer).
  *    IMPORTANT: must be `zfb preview`, NOT `zfb dev`.
  *    See Takazudo/zudo-front-builder#377 (closed — by-design).
- *  - Bin sidecar `design-token-panel-server` on port 24686, with:
+ *  - Bin sidecar `zdtp-server` on port 24686, with:
  *      --write-root .
  *      --routing scaffold.routing.json
  *      --allow-origin http://localhost:44328
@@ -54,7 +54,7 @@ const TOKENS_PATH = resolve(__dirname, '..', '..', 'styles', 'global.css');
 
 // The bin sidecar runs on port 24686 for the zfb-tailwind demo.
 // When running this spec in isolation (no live bin sidecar), start it via:
-//   pnpm exec design-token-panel-server --write-root . --routing scaffold.routing.json --port 24686 --allow-origin http://localhost:44328
+//   pnpm exec zdtp-server --write-root . --routing scaffold.routing.json --port 24686 --allow-origin http://localhost:44328
 const APPLY_URL = 'http://127.0.0.1:24686/apply';
 // The preview server's origin (used for CORS allow-origin header matching).
 // The bin sidecar configured with `--allow-origin http://localhost:44328` (dev origin).

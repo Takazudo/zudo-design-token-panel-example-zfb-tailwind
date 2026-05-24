@@ -12,8 +12,7 @@
     "resolveJsonModule": true,
     "types": ["node"],
     "noEmit": true,
-    "skipLibCheck": true,
-    "baseUrl": "."
+    "skipLibCheck": true
   },
   "include": [
     "pages/**/*",

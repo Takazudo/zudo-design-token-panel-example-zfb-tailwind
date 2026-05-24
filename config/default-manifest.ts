@@ -29,7 +29,7 @@
  * Spacing hsp/vsp scales surfaced as separate tiers in Wave 8 (panel-hardening).
  */
 
-import type { PanelConfig } from '@takazudo/zudo-design-token-panel/astro';
+import type { PanelConfig } from '@takazudo/zdtp/astro';
 import { defaultCluster } from './default-cluster';
 
 type TabConfig = PanelConfig['tabs'][number];

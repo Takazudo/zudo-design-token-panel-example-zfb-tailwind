@@ -31,7 +31,7 @@
  * agree byte-for-byte on which CSS-var prefix maps to which file.
  */
 
-import type { PanelConfig } from '@takazudo/zudo-design-token-panel/astro';
+import type { PanelConfig } from '@takazudo/zdtp/astro';
 import { defaultTabs } from './default-manifest';
 
 // Inlined from scaffold.routing.json — mirrors the same routing object the

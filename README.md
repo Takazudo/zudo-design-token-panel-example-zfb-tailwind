@@ -1,6 +1,6 @@
 # zudo-design-token-panel-example-zfb-tailwind
 
-Standalone example demonstrating [@takazudo/zudo-design-token-panel](https://github.com/Takazudo/zudo-design-token-panel) inside a [zfb (zudo-front-builder)](https://github.com/Takazudo/zudo-front-builder) project with **Tailwind v4 enabled** via `tailwind: { enabled: true }`.
+Standalone example demonstrating [@takazudo/zdtp](https://github.com/Takazudo/zudo-design-token-panel) inside a [zfb (zudo-front-builder)](https://github.com/Takazudo/zudo-front-builder) project with **Tailwind v4 enabled** via `tailwind: { enabled: true }`.
 
 Design tokens are registered via Tailwind v4's `@theme` block so utility classes like `bg-primary`, `p-vsp-md`, and `text-body` resolve back to the panel's `--zfbtw-*` CSS custom properties.
 
@@ -44,7 +44,7 @@ pnpm dev
 
 This starts two processes in parallel via `concurrently`:
 - `zfb dev` — the zfb dev server at `http://localhost:44328`
-- `design-token-panel-server` — the bin sidecar at port `24686`
+- `zdtp-server` — the bin sidecar at port `24686`
 
 Open the panel from the browser:
 ```js

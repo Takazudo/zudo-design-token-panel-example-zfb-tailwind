@@ -6,7 +6,7 @@
  * `window.zfbTw` stays undefined in dev mode.
  * See Takazudo/zudo-front-builder#377 (closed — by-design).
  *
- * The bin sidecar (design-token-panel-server) is started separately for
+ * The bin sidecar (zdtp-server) is started separately for
  * the apply-roundtrip spec; that spec drives fetch() directly, so no
  * webServer entry is needed for it here.
  */

@@ -46,11 +46,11 @@
  */
 
 import { useEffect } from 'preact/hooks';
-import type { PanelConfig } from '@takazudo/zudo-design-token-panel/astro';
+import type { PanelConfig } from '@takazudo/zdtp/astro';
 import { panelConfig } from '../config/panel-config';
 
 // Mirrors the panel module's main entry shape we lazy-import below.
-type DesignTokenPanelModule = typeof import('@takazudo/zudo-design-token-panel');
+type DesignTokenPanelModule = typeof import('@takazudo/zdtp');
 
 interface DesignTokenPanelAdapterState {
   /** Per-`storagePrefix` bind flag — re-runs are no-ops. */
@@ -118,7 +118,7 @@ function hasPersistedOverrides(stateV2Key: string): boolean {
 
 async function loadPanelModule(state: DesignTokenPanelAdapterState) {
   if (state.modulePromise === null) {
-    state.modulePromise = import('@takazudo/zudo-design-token-panel').then((mod) => {
+    state.modulePromise = import('@takazudo/zdtp').then((mod) => {
       // Configure FIRST — every other panel API reads getPanelConfig() and
       // must observe the host's intended values, not the package sentinel.
       mod.configurePanel(panelConfig);
