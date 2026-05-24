@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@takazudo/zdtp':
-        specifier: 0.1.0-next.0
-        version: 0.1.0-next.0(preact@10.29.2)
+        specifier: 0.1.0-next.1
+        version: 0.1.0-next.1(preact@10.29.2)
       '@takazudo/zfb':
         specifier: 0.1.0-next.5
         version: 0.1.0-next.5
@@ -47,8 +47,8 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  '@takazudo/zdtp@0.1.0-next.0':
-    resolution: {integrity: sha512-eKE+xEZfCeaxe3VAektz8+8plk/EaOOZmS/SKJB5g3qFZF4pWHfzNhngyDAvUkj3f2yCpnIyT+xeZjZqQ1f7Lg==}
+  '@takazudo/zdtp@0.1.0-next.1':
+    resolution: {integrity: sha512-USvjhTQBvgdGBJEfM1F9fu30Q2uTytyIP4nYSDcUPeLb4pvnS4InSho4vrFWW+z8Jr5M4G5DxQd49HcAnUv9HA==}
     engines: {node: '>=22.0.0', pnpm: '>=10.0.0'}
     hasBin: true
     peerDependencies:
@@ -238,7 +238,7 @@ snapshots:
     dependencies:
       playwright: 1.60.0
 
-  '@takazudo/zdtp@0.1.0-next.0(preact@10.29.2)':
+  '@takazudo/zdtp@0.1.0-next.1(preact@10.29.2)':
     dependencies:
       culori: 4.0.2
       preact: 10.29.2
