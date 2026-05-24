@@ -138,7 +138,7 @@
 /* ── Design token panel chrome ───────────────────────────────────────────── */
 /* Vite library mode strips the source CSS import from the emitted JS, so
    consumers must re-pull it explicitly via this CSS import. */
-@import '@takazudo/zudo-design-token-panel/styles.css';
+@import '@takazudo/zdtp/styles.css';
 
 /* ── Tailwind v4 ─────────────────────────────────────────────────────────── */
 @import "tailwindcss";

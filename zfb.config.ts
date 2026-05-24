@@ -1,7 +1,7 @@
 import { defineConfig } from "@takazudo/zfb/config";
 
 /**
- * zfb + Tailwind v4 example for @takazudo/zudo-design-token-panel.
+ * zfb + Tailwind v4 example for @takazudo/zdtp.
  *
  * Mirrors examples/zfb/ but with Tailwind v4 enabled via
  * `tailwind: { enabled: true }`. This flag instructs zfb to integrate
