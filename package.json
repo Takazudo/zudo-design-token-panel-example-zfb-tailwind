@@ -19,7 +19,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@takazudo/zdtp": "0.2.1",
+    "@takazudo/zdtp": "0.2.2",
     "@takazudo/zfb": "0.1.0-next.45",
     "@takazudo/zfb-runtime": "0.1.0-next.45",
     "preact": "^10.29.1",
