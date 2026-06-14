@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * TabsDemo — 3-tab horizontal nav with animated active indicator.
  *
@@ -20,7 +22,11 @@ import { Island, type IslandProps } from '@takazudo/zfb';
 
 const TABS = ['Overview', 'Details', 'Settings'] as const;
 
-function TabsInner() {
+// Exported so zfb's island scanner registers it in the hydration manifest:
+// `<Island>` emits a `data-zfb-island="TabsInner"` marker (named after the
+// child component), and the runtime resolves that name only for exported
+// "use client" components reachable from pages/. (zfb >= 0.1.0-next.x)
+export function TabsInner() {
   const [activeIndex, setActiveIndex] = useState(0);
   const tabCount = TABS.length;
   const indicatorPct = 100 / tabCount;

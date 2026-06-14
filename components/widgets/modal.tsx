@@ -32,7 +32,11 @@ import { useEffect, useRef } from 'preact/hooks';
 import { useState } from 'preact/hooks';
 import { Island, type IslandProps } from '@takazudo/zfb';
 
-function ModalInner() {
+// Exported so zfb's island scanner registers it in the hydration manifest:
+// `<Island>` emits a `data-zfb-island="ModalInner"` marker (named after the
+// child component), and the runtime resolves that name only for exported
+// "use client" components reachable from pages/. (zfb >= 0.1.0-next.x)
+export function ModalInner() {
   const [isOpen, setIsOpen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
