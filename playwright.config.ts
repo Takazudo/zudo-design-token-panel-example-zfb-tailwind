@@ -8,6 +8,13 @@
  * `pnpm preview` use, so the ports and the sidecar's allowed CORS origins are
  * resolved exactly once (`scripts/ports.mjs`) and cannot drift from this config.
  *
+ * They are TWO webServer entries rather than one `concurrently` command on
+ * purpose: Playwright waits for every entry's port before the first spec runs,
+ * so the sidecar gets a readiness gate of its own. Behind a single entry only
+ * `PREVIEW_PORT` was waited on, and `apply-roundtrip.spec.ts` — the first spec
+ * file alphabetically, POSTing the sidecar with a bare `fetch` and no retry —
+ * would fail with ECONNREFUSED on any run where the sidecar bound second.
+ *
  * Why preview rather than `zfb dev`: `zfb dev` does not inject the
  * `<script type="module" src="/assets/islands-*.js">` tag, so the Preact island
  * holding PanelMount never hydrates and `window.zfbTw` stays undefined
@@ -33,7 +40,7 @@
 import { defineConfig, devices } from '@playwright/test';
 // The three ports resolve in exactly one place so package.json's launcher,
 // plugins/dev-apply-proxy.mjs, the specs and this config cannot disagree.
-import { PREVIEW_PORT, BROWSER_ORIGIN } from './scripts/ports.mjs';
+import { PREVIEW_PORT, ZDTP_PORT, BROWSER_ORIGIN } from './scripts/ports.mjs';
 
 const hasExternalBaseUrl = Boolean(process.env.BASE_URL);
 
@@ -62,13 +69,24 @@ export default defineConfig({
   ],
   webServer: hasExternalBaseUrl
     ? undefined
-    : {
-        // Build first so the islands script tag is injected, then serve the
-        // built output and the apply sidecar together.
-        command: 'pnpm run build && node scripts/launch.mjs test-servers',
-        port: PREVIEW_PORT,
-        reuseExistingServer: false,
-        // Build can take ~30–60 s in CI.
-        timeout: 180_000,
-      },
+    : [
+        {
+          // Build first so the islands script tag is injected, then serve the
+          // built output.
+          command: 'pnpm run build && node scripts/launch.mjs preview',
+          port: PREVIEW_PORT,
+          reuseExistingServer: false,
+          // Build can take ~30–60 s in CI.
+          timeout: 180_000,
+        },
+        {
+          // The sidecar apply-roundtrip.spec.ts POSTs to. Its own entry, so
+          // Playwright blocks on ZDTP_PORT too instead of assuming it is up by
+          // the time the preview port opens.
+          command: 'node scripts/launch.mjs dev:sidecar',
+          port: ZDTP_PORT,
+          reuseExistingServer: false,
+          timeout: 60_000,
+        },
+      ],
 });

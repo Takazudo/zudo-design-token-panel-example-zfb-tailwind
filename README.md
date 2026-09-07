@@ -144,11 +144,14 @@ pnpm test:unit   # node:test — the dev-apply-proxy's header forwarding
 pnpm test:e2e    # Playwright — builds, serves preview + sidecar, then runs
 ```
 
-`pnpm test:e2e` is self-contained: its `webServer` runs
-`node scripts/launch.mjs test-servers`, which brings up `zfb preview` and the
-apply sidecar together. It must be preview rather than `zfb dev` — dev injects
-no islands script tag, so `window.zfbTw` never appears
-(Takazudo/zudo-front-builder#377, still true at zfb 2.15.1).
+`pnpm test:e2e` is self-contained: it declares two `webServer` entries —
+`node scripts/launch.mjs preview` (after `pnpm run build`) and
+`node scripts/launch.mjs dev:sidecar` — so Playwright waits on `PREVIEW_PORT`
+**and** `ZDTP_PORT` before the first spec runs. One entry starting both would
+only gate the site, and `apply-roundtrip.spec.ts` POSTs the sidecar with no
+retry. It must be preview rather than `zfb dev` — dev injects no islands script
+tag, so `window.zfbTw` never appears (Takazudo/zudo-front-builder#377, still
+true at zfb 2.15.1).
 
 ## Apply endpoint
 

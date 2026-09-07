@@ -60,20 +60,9 @@ const targets = {
     ],
   ],
 
+  // Also Playwright's site webServer entry; the sidecar is its own entry there
+  // (see playwright.config.ts) so each port gets its own readiness gate.
   preview: () => [bin('zfb'), ['preview', '--port', String(PREVIEW_PORT)]],
-
-  // Playwright's webServer target: the built site plus the sidecar the
-  // apply-roundtrip spec POSTs to, so a bare `pnpm test:e2e` is self-contained.
-  'test-servers': () => [
-    bin('concurrently'),
-    [
-      '-k',
-      '-n', 'preview,tokens-bin',
-      '-c', 'blue,green',
-      selfTarget('preview'),
-      selfTarget('dev:sidecar'),
-    ],
-  ],
 };
 
 const target = process.argv[2];
