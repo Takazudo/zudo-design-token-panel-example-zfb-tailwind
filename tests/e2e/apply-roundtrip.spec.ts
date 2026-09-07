@@ -4,62 +4,69 @@
  * Exercises the bin sidecar (`zdtp-server`) apply endpoint
  * directly via fetch(), proving the full bin → CSS file rewrite path.
  *
- * Panel-driven Apply is NOT tested here.
- * ----------------------------------------
- * The panel's Apply modal (`apply-modal.tsx`) only includes *color* token
- * diffs in its payload — spacing, typography, and size overrides are
- * deliberately excluded (see `src/apply/build-apply-overrides.ts`). Tweaking
- * a size token like `--zfbtw-radius` and clicking Apply leaves the modal's
- * primary button `aria-disabled="true"` (`isEmpty=true`). A panel-level fix
- * to include non-color overrides in the Apply payload is tracked upstream in
- * the `@takazudo/zdtp` package.
+ * Why fetch() rather than the panel's Apply button
+ * ------------------------------------------------
+ * Because the preview server has no `/api/dev/apply`: that route is registered
+ * by `plugins/dev-apply-proxy.mjs` through zfb's `devMiddleware` hook, which
+ * `zfb build`/`zfb preview` never invoke. Driving the UI here would post into
+ * a 404, so the spec talks to the sidecar directly.
+ *
+ * NOTE — the historical reason recorded here was different, and is now stale.
+ * This header used to say the panel's Apply payload carried *color* diffs only,
+ * so a size token like `--zfbtw-radius` could never be applied from the UI. At
+ * zdtp 0.5.1 that is no longer true: `buildApplyOverrides` emits spacing,
+ * typography and size overrides too (see
+ * `node_modules/@takazudo/zdtp/dist/apply/build-apply-overrides.d.ts`,
+ * "Spacing / typography / size — EMITTED when the corresponding
+ * `TokenOverrides` map is non-empty"). The spec below is unaffected — it never
+ * went through the panel — but a UI-driven Apply spec is now buildable against
+ * a `zfb dev` server, which this harness does not run. That rewrite is
+ * deliberately out of scope here.
  *
  * Prerequisites
  * -------------
- *  - zfb preview server on port 4173 (started by playwright.config.ts webServer).
- *    IMPORTANT: must be `zfb preview`, NOT `zfb dev`.
- *    See Takazudo/zudo-front-builder#377 (closed — by-design).
- *  - Bin sidecar `zdtp-server` on port 24686, with:
- *      --write-root .
- *      --routing scaffold.routing.json
- *      --allow-origin http://localhost:44328
- *    The apply-roundtrip spec drives fetch() directly against the bin sidecar
- *    rather than routing through the zfb dev-apply-proxy, because the preview
- *    server does not expose the /api/dev/apply endpoint (dev-only).
+ *  - `zfb preview` serving the BUILT output and the `zdtp-server` sidecar,
+ *    both started by playwright.config.ts's webServer via
+ *    `node scripts/launch.mjs test-servers`. It must be preview, not
+ *    `zfb dev`: dev injects no islands script tag, so `window.zfbTw` stays
+ *    undefined (Takazudo/zudo-front-builder#377, closed — by-design; still
+ *    true at zfb 2.15.1).
+ *  - No port or origin is written down in this file. `scripts/ports.mjs`
+ *    resolves `ZDTP_PORT` and the browser origin (from `PREVIEW_PORT`, or
+ *    `BASE_URL` when the caller manages the servers), and the launcher passes
+ *    the SAME origins to the sidecar's repeatable `--allow-origin`. That shared
+ *    derivation is what stops the sidecar's CORS check and this POST's Origin
+ *    header from drifting apart.
  *
  * Token path
  * ----------
  * `scaffold.routing.json`: { "zfbtw": "styles/global.css" }
  * The bin writes the updated token to `styles/global.css` in the repo root.
  *
- * Try/finally restores the original token value so re-running the spec is
- * idempotent. The afterAll hook best-effort restores even if the main test
- * assertion fails.
- *
- * Bin sidecar port
- * ----------------
- * Port 24686 (zfb-tailwind demo's bin port — offset +1 from the plain zfb
- * demo on 24685 to avoid collision when both run simultaneously).
+ * The test restores the original token value inline, and `afterAll` restores
+ * again as a safety net. Both restores ASSERT: a restore that silently failed
+ * would leave `styles/global.css` dirty in the working tree and the next run
+ * would compare against a corrupted baseline.
  */
 
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { BROWSER_ORIGIN, ZDTP_PORT } from '../../scripts/ports.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // styles/global.css is two levels up from tests/e2e/.
 const TOKENS_PATH = resolve(__dirname, '..', '..', 'styles', 'global.css');
 
-// The bin sidecar runs on port 24686 for the zfb-tailwind demo.
-// When running this spec in isolation (no live bin sidecar), start it via:
-//   pnpm exec zdtp-server --write-root . --routing scaffold.routing.json --port 24686 --allow-origin http://localhost:44328
-const APPLY_URL = 'http://127.0.0.1:24686/apply';
-// The preview server's origin (used for CORS allow-origin header matching).
-// The bin sidecar configured with `--allow-origin http://localhost:44328` (dev origin).
-// For the apply POST, send the dev origin so the sidecar accepts it.
-const ORIGIN = 'http://localhost:44328';
+// When running this spec against caller-managed servers, start the sidecar the
+// same way the launcher does: `node scripts/launch.mjs dev:sidecar`, which
+// passes every origin in SIDECAR_ALLOWED_ORIGINS to --allow-origin.
+const APPLY_URL = `http://127.0.0.1:${ZDTP_PORT}/apply`;
+// reason: the sidecar compares this verbatim against its --allow-origin list,
+// which scripts/ports.mjs derives from the same BROWSER_ORIGIN.
+const ORIGIN = BROWSER_ORIGIN;
 
 async function readTokenValue(cssVar: string): Promise<string> {
   const css = await readFile(TOKENS_PATH, 'utf-8');
@@ -98,16 +105,13 @@ test.describe('zfb-tailwind — apply pipeline round-trip', () => {
   });
 
   test.afterAll(async () => {
-    // Restore the original token value via the bin so the file on disk lands
-    // in a known-good state regardless of how the test exited.
-    if (originalValue) {
-      try {
-        await postApply(TARGET_VAR, originalValue);
-      } catch {
-        // Best-effort restoration — the in-band assertion already failed if
-        // we get here; surfacing the secondary error would mask the primary.
-      }
-    }
+    // Safety net for an abnormal exit: put the file back and PROVE it went
+    // back. Swallowing a failed restore here is how `styles/global.css` ends up
+    // committed with a test value in it, and how the next run's baseline is
+    // read from an already-corrupted file.
+    if (!originalValue) return;
+    await postApply(TARGET_VAR, originalValue);
+    expect(await readTokenValue(TARGET_VAR)).toBe(originalValue);
   });
 
   test('postApply() rewrites a token directly via the bin sidecar', async () => {
@@ -135,8 +139,8 @@ test.describe('zfb-tailwind — apply pipeline round-trip', () => {
       )
       .toBe(altValue);
 
-    // Restore immediately (afterAll is a safety net; restore inline too so
-    // the file on disk is clean even if the test runner exits abnormally).
+    // Restore inline as well, so the file is clean the moment this test ends
+    // rather than only after the suite does.
     await postApply(TARGET_VAR, originalValue);
 
     await expect
