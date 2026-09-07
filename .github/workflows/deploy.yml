@@ -1,26 +1,53 @@
-name: Deploy to Cloudflare Pages
+# Cloudflare Workers (static assets) deploy for this zfb example.
+#
+#   build   — always runs (push + PR): install, audit (`pnpm audit`), typecheck
+#             (`zfb check`), build (`zfb build`), assert the Tailwind @theme
+#             chain over the built CSS, and parse wrangler.toml. Needs no
+#             Cloudflare credentials, so a fresh clone or a fork is green
+#             immediately. This is the real correctness gate.
+#   deploy  — push to `main` only: `wrangler deploy` (uploads the Worker AND
+#             attaches the custom domain from wrangler.toml).
+#   preview — pull requests only: uploads a preview version, asserts the
+#             preview actually serves the expected routing matrix, and
+#             comments its URL on the PR. Uses `wrangler versions upload`,
+#             which does NOT touch routes, so previews never publish to the
+#             custom domain.
+#
+# Both credentialed jobs SELF-SKIP when either secrets.CLOUDFLARE_API_TOKEN or
+# secrets.CLOUDFLARE_ACCOUNT_ID is unset, so the repo is not red-by-design
+# before Cloudflare is wired up (and so fork PRs, which never receive secrets,
+# stay green).
+#
+# No `branches:` filter on `pull_request` below — sub-PRs in this repo target
+# stacked base branches (e.g. `base/workers-migration-deps`), not `main`
+# directly. A `[main]` filter would give those PRs no CI at all.
+#
+# Enable deploys by adding, in repo Settings -> Secrets and variables -> Actions:
+#   CLOUDFLARE_API_TOKEN   token with Account · Workers Scripts: Edit,
+#                          Account · Account Settings: Read, and
+#                          Zone · Workers Routes + DNS: Edit on zudolab.dev
+#                          (required by the custom domain)
+#   CLOUDFLARE_ACCOUNT_ID  target Cloudflare account id
+name: Deploy
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
-
-permissions:
-  contents: read
-  pull-requests: write
 
 concurrency:
   group: deploy-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded PR runs, but never interrupt a production deploy midway.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-deploy:
-    name: Build and deploy
+  build:
+    name: Build (typecheck + zfb build)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -33,102 +60,382 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install wrangler
-        run: npm install -g wrangler@4
-
-      # zfb (@takazudo/zfb) and the panel (@takazudo/zdtp) now come from npm.
-      # The `zfb` CLI binary ships with @takazudo/zfb, so `pnpm build` (zfb build)
-      # runs the local node_modules/.bin/zfb — no cargo, no sibling clones.
-      - name: Install consumer deps
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify zfb CLI
-        run: pnpm exec zfb --version
+      # Keeps the audit fixed rather than fixed-once. The tree is clean at
+      # EVERY severity as of this commit (Wave 1's pre-epic baseline was
+      # 1 critical / 1 high / 6 moderate / 1 low), so `high` is a gate with
+      # headroom, not a tolerated-debt line: a newly published moderate cannot
+      # block an unrelated PR, while the critical+high classes this repo had
+      # to clear cannot come back silently.
+      #
+      # It runs BEFORE typecheck/build so a supply-chain regression is the
+      # first thing the log shows, not a footnote after the build.
+      #
+      # NOTE: `pnpm audit` queries the registry advisory DB live, so this step
+      # can turn red on a commit that changed nothing — that is the point, but
+      # it means a red gate here is triaged by bumping the offending dep, never
+      # by lowering `--audit-level`. This repo's hono floor is DECLARED
+      # (`pnpm.overrides`) rather than resolved, precisely because
+      # `--frozen-lockfile` would otherwise reinstall whatever the lockfile
+      # happened to capture, forever.
+      - name: Audit dependencies
+        run: pnpm audit --audit-level high
 
-      - name: Build consumer
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Guards plugins/dev-apply-proxy.mjs's header forwarding. That proxy
+      # shipped forwarding `content-type` only, which 403s every panel-driven
+      # Apply, and no browser spec can see it (apply-roundtrip.spec.ts POSTs the
+      # sidecar directly and sets Origin itself). node:test only, no build and no
+      # browser needed, so it belongs in this credential-free gate.
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Build
         run: pnpm build
 
-      - name: Compute deploy branch slug
-        id: branch
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          # Use pr-<number> as the slug for PRs — Cloudflare Pages truncates branch
-          # alias subdomains to 28 chars, silently breaking the preview URL for any
-          # branch name longer than that. pr-<n> is stable and short.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            DEPLOY_BRANCH="pr-${PR_NUMBER}"
-          else
-            DEPLOY_BRANCH="main"
-          fi
-          echo "deploy_branch=${DEPLOY_BRANCH}" >> "$GITHUB_OUTPUT"
+      # The only check in this repo that can see a silently-empty Tailwind
+      # utility layer. zfb wraps a native binary embedding its own Tailwind
+      # compiler, so a zfb upgrade can stop compiling the @theme block while
+      # `zfb build` still succeeds and every route still returns 200 with the
+      # right <title> — which is exactly what the routing matrix below
+      # asserts, so it would not notice. Reads ./dist, so it must follow the
+      # build. `--self-test` (wired into the npm script) first proves the
+      # assertion still fails on mangled CSS, so a check that has quietly
+      # stopped asserting cannot report green.
+      - name: Assert Tailwind @theme chain
+        run: pnpm run assert:theme-chain
 
-      - name: Ensure Cloudflare Pages project exists
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          # Idempotent: create on first run, no-op on subsequent runs.
-          # wrangler@4 no longer auto-creates the project on `pages deploy`.
-          out=$(wrangler pages project create zudo-design-token-panel-example-zfb-tailwind \
-            --production-branch=main 2>&1) && rc=0 || rc=$?
-          echo "$out"
-          if [ "$rc" -eq 0 ]; then
-            echo "Project created."
-          elif echo "$out" | grep -qE "already exists|8000077|duplicate"; then
-            echo "Project already exists — continuing."
-          else
-            echo "Project create failed with unexpected error."
-            exit "$rc"
-          fi
+      # Runs AFTER the build (it reads ./dist) and needs no Cloudflare
+      # credentials, so this is the only place wrangler.toml is parsed on a
+      # fork PR or a repo with no secrets. Without it a typo in wrangler.toml
+      # would pass every PR check and first surface in the production deploy.
+      # (`wrangler --version` does NOT read wrangler.toml, so it is no
+      # substitute for this step.)
+      - name: Validate wrangler.toml
+        run: pnpm exec wrangler deploy --dry-run
 
-      - name: Deploy to Cloudflare Pages
-        id: deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          DEPLOY_BRANCH: ${{ steps.branch.outputs.deploy_branch }}
+      # --dry-run above only WARNS about misplaced top-level keys, so it cannot
+      # fail the build on the TOML scoping trap: any key written after the
+      # `[assets]` table header is parsed as a member OF that table and then
+      # silently ignored ("Unexpected fields found in assets field"), leaving
+      # e.g. preview_urls quietly off. Comments are stripped first — a bare
+      # grep cannot tell a commented-out example from a live key.
+      - name: Assert wrangler.toml key scoping
         run: |
-          for attempt in 1 2 3; do
-            echo "Deploy attempt $attempt/3..."
-            if wrangler pages deploy dist \
-              --project-name=zudo-design-token-panel-example-zfb-tailwind \
-              --branch="${DEPLOY_BRANCH}" \
-              --commit-hash="${GITHUB_SHA}" \
-              --commit-message="Deploy: ${GITHUB_SHA}"; then
-              echo "Deploy succeeded on attempt $attempt"
-              if [ "${DEPLOY_BRANCH}" = "main" ]; then
-                echo "deploy_url=https://zudo-design-token-panel-example-zfb-tailwind.pages.dev/" >> "$GITHUB_OUTPUT"
-              else
-                echo "deploy_url=https://${DEPLOY_BRANCH}.zudo-design-token-panel-example-zfb-tailwind.pages.dev/" >> "$GITHUB_OUTPUT"
-              fi
-              exit 0
+          # `|| true` on every grep pipeline below: the runner's default
+          # `bash -eo pipefail` turns a no-match grep (exit 1) into a failed
+          # assignment, which `set -e` would kill the step over before the
+          # explicit ::error:: messages could fire.
+          live=$(sed -e 's/#.*$//' wrangler.toml | grep -v '^[[:space:]]*$' || true)
+          assets_line=$(grep -n '^\[assets\]$' <<< "$live" | cut -d: -f1 || true)
+          if [ -z "$assets_line" ]; then
+            echo "::error::wrangler.toml has no [assets] table."
+            exit 1
+          fi
+          for key in name compatibility_date workers_dev preview_urls; do
+            key_line=$(grep -n "^${key}[[:space:]]*=" <<< "$live" | cut -d: -f1 | tail -n 1 || true)
+            if [ -z "$key_line" ]; then
+              echo "::error::wrangler.toml is missing top-level key '${key}'."
+              exit 1
             fi
-            if [ "$attempt" -lt 3 ]; then
-              echo "Deploy failed, retrying in 150 seconds..."
-              sleep 150
+            if [ "$key_line" -gt "$assets_line" ]; then
+              echo "::error::wrangler.toml key '${key}' is below the [assets] header — TOML scopes it INTO [assets] and wrangler ignores it."
+              exit 1
             fi
           done
-          echo "Deploy failed after 3 attempts"
-          exit 1
+          # Assets-only Worker: these keys must not exist at all.
+          for key in main binding compatibility_flags; do
+            if grep -qE "^[[:space:]]*${key}[[:space:]]*=" <<< "$live"; then
+              echo "::error::wrangler.toml sets '${key}' — this is an assets-only Worker and 'wrangler deploy' rejects it."
+              exit 1
+            fi
+          done
+          echo "OK: wrangler.toml top-level keys are above [assets]; no assets-only violations."
 
-      - name: Comment on PR
-        if: github.event_name == 'pull_request' && steps.deploy.outcome == 'success'
+  deploy:
+    name: Deploy to Cloudflare Workers
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Preflight — is Cloudflare configured?
+        id: preflight
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID is not set — skipping deploy. Add both in repo Settings to enable deploys."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy
+        if: steps.preflight.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy
+
+  preview:
+    name: Preview deploy
+    needs: build
+    # Fork PRs never receive repository secrets, so a preview could only fail
+    # there. Skip the job outright rather than letting it run and self-skip.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # `assets/<name>-<hash>.<ext>` filenames are content-hashed per build, so
+      # no fixed path can be hardcoded here. Pick one real emitted asset instead
+      # of guessing a filename.
+      - name: Find a static asset to probe
+        id: asset
+        run: |
+          # `-print -quit`, not `| head -n 1`: head closing the pipe early can
+          # SIGPIPE find, and the runner's `bash -eo pipefail` would then kill
+          # the step with 141 instead of reaching the check below. `|| true`
+          # keeps a missing directory on the same reporting path as an empty one.
+          asset_path=$(find dist/assets -type f -print -quit 2>/dev/null | sed 's#^dist/##' || true)
+          if [ -z "$asset_path" ]; then
+            echo "::error::No file found under dist/assets — build did not emit static assets."
+            exit 1
+          fi
+          echo "path=${asset_path}" >> "$GITHUB_OUTPUT"
+
+      - name: Preflight — is Cloudflare configured?
+        id: preflight
+        env:
+          # Fork PRs never receive secrets, so this is also the fork guard.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID is not available (unset, or this is a fork PR) — skipping preview deploy."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload preview version
+        id: preview
+        if: steps.preflight.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # Machine-readable NDJSON record of what wrangler did. The account's
+          # workers.dev subdomain is not known here, so the preview URL cannot be
+          # templated — and scraping the human-readable stdout is brittle. This
+          # file is the interface wrangler provides for CI.
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.ndjson
+        run: |
+          # A Worker only comes into existence on the first `wrangler deploy`,
+          # which runs on push to main — so on every PR opened BEFORE that
+          # first deploy (this migration's own PR, and any PR against a
+          # freshly created Worker) `versions upload` exits non-zero with
+          # "You cannot upload a new version of a Worker that does not yet
+          # exist." That is an expected bootstrap state, not a broken PR.
+          #
+          # Match that ONE message and soft-skip it; every other non-zero exit
+          # still fails the job, so a genuine upload failure is never masked.
+          set +e
+          upload_log="${RUNNER_TEMP}/wrangler-upload.log"
+          pnpm exec wrangler versions upload \
+            --preview-alias "pr-${PR_NUMBER}" \
+            --message "Preview for PR #${PR_NUMBER}" 2>&1 | tee "$upload_log"
+          upload_rc=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$upload_rc" -ne 0 ]; then
+            if grep -qF 'Worker that does not yet exist' "$upload_log"; then
+              echo "::notice::Worker does not exist yet — it is created by the first 'wrangler deploy' on main. Skipping the preview upload, routing assertions and PR comment for this run."
+              echo "preview_url=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::wrangler versions upload failed (exit ${upload_rc}) for a reason other than a not-yet-created Worker."
+            exit "$upload_rc"
+          fi
+
+          # Guard with `[ -s ... ]` before jq: the runner's default
+          # `bash -eo pipefail` means a missing/empty file would make jq exit 2
+          # and `set -e` kills the step before the soft-skip notice below can
+          # fire. `tail -n 1`, not `head -1`: head closing the pipe early can
+          # SIGPIPE jq and fail the step with 141.
+          PREVIEW_URL=""
+          if [ -s "$WRANGLER_OUTPUT_FILE_PATH" ]; then
+            PREVIEW_URL=$(jq -r 'select(.type == "version-upload") | .preview_alias_url // empty' \
+              "$WRANGLER_OUTPUT_FILE_PATH" | tail -n 1)
+          fi
+
+          if [ -z "$PREVIEW_URL" ]; then
+            # Preview URLs additionally require the account to have a workers.dev
+            # subdomain with preview routing enabled (see wrangler.toml), and a
+            # brand-new Worker has zero prior deployments — expected on the very
+            # first PR against a freshly created Worker.
+            echo "::notice::Preview version uploaded, but no preview URL was reported — skipping the routing assertions and PR comment."
+          fi
+          echo "preview_url=${PREVIEW_URL}" >> "$GITHUB_OUTPUT"
+
+      # This cannot validate the custom domain — a preview never touches
+      # routes — but it is the only pre-merge evidence that the Worker and its
+      # assets actually serve this stack's routing contract: all six
+      # prerendered pages (a page silently lost from the prerender set is the
+      # most likely regression), the directory-index trailing-slash redirect,
+      # a content-hashed asset, and an honest 404.
+      - name: Assert preview serves the expected routing matrix
+        if: steps.preview.outputs.preview_url != ''
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.preview_url }}
+          STATIC_ASSET_PATH: ${{ steps.asset.outputs.path }}
+        run: |
+          # A just-created preview alias can 404 / return edge errors for a few
+          # seconds while it propagates, so retry rather than fail the PR check
+          # on timing.
+          fetch() {
+            curl -sS --retry 6 --retry-delay 5 --retry-all-errors "$@"
+          }
+
+          # ROUTE MATRIX — single source of truth for the page assertions, one
+          # `<url path>|<expected full <title> element>` per prerendered page.
+          # Titles are copied verbatim from each pages/*.tsx `title=` prop
+          # (byte-exact, including the literal U+2014 em dashes) — matching
+          # Wave 1's pre-epic baseline ledger (issue #8).
+          #
+          # Paths carry a TRAILING SLASH: `zfb build` emits directory-index
+          # output (dist/prose/index.html, dist/components/data/index.html, …),
+          # so the trailing-slash form is the canonical URL here.
+          #
+          # Matching is on the FULL <title> element, not a bare substring: the
+          # per-component titles all end in "— Design Token Panel", so a loose
+          # substring match could pass while the wrong page is served.
+          routes=(
+            "/|<title>zfb + Tailwind v4 Example — Design Token Panel</title>"
+            "/prose/|<title>Prose Demo — zfb + Tailwind v4 — Design Token Panel</title>"
+            "/components/data/|<title>Data — zfb + Tailwind v4 — Design Token Panel</title>"
+            "/components/forms/|<title>Forms — zfb + Tailwind v4 — Design Token Panel</title>"
+            "/components/status/|<title>Status — zfb + Tailwind v4 — Design Token Panel</title>"
+            "/components/widgets/|<title>Widgets — zfb + Tailwind v4 — Design Token Panel</title>"
+          )
+
+          for entry in "${routes[@]}"; do
+            route_path="${entry%%|*}"
+            route_title="${entry#*|}"
+            if ! body=$(fetch -fL "${PREVIEW_URL}${route_path}"); then
+              echo "::error::GET ${route_path} failed (non-2xx or transport error)."
+              exit 1
+            fi
+            # -F: fixed-string match, so nothing in the title is read as a regex.
+            if ! grep -qF "$route_title" <<< "$body"; then
+              echo "::error::GET ${route_path} did not return the expected page title (${route_title})."
+              exit 1
+            fi
+            echo "OK: ${route_path} served ${route_title}"
+          done
+
+          # /prose -> 307 -> /prose/. Under the default
+          # html_handling = "auto-trailing-slash", a directory-index asset makes
+          # the TRAILING-SLASH form canonical and the bare path redirect to it.
+          # This is INVERTED from the flat-file sibling repo
+          # (zudo-design-token-panel-example-vite-react emits dist/prose.html,
+          # where /prose.html redirects to /prose) — do not "fix" this to match
+          # it. 307 is the observed code, verified against `wrangler dev`
+          # (workerd) with this repo's wrangler.toml and dist/.
+          #
+          # One curl call for both fields: two separate requests would be two
+          # chances to hit a transient edge error.
+          redirect_probe=$(fetch -o /dev/null -w '%{http_code} %{redirect_url}' "${PREVIEW_URL}/prose")
+          redirect_status="${redirect_probe%% *}"
+          redirect_target="${redirect_probe#* }"
+          if [ "$redirect_status" != "307" ] || [[ "$redirect_target" != */prose/ ]]; then
+            echo "::error::GET /prose did not 307-redirect to /prose/ (status: ${redirect_status}, target: '${redirect_target}')."
+            exit 1
+          fi
+          echo "OK: /prose redirected (307) to ${redirect_target}."
+
+          # One /assets/... file -> 200. Path discovered from the build output
+          # above, because the filenames are content-hashed per build.
+          status=$(fetch -o /dev/null -w '%{http_code}' "${PREVIEW_URL}/${STATIC_ASSET_PATH}")
+          if [ "$status" != "200" ]; then
+            echo "::error::GET /${STATIC_ASSET_PATH} returned status ${status}, expected 200."
+            exit 1
+          fi
+          echo "OK: /${STATIC_ASSET_PATH} returned 200."
+
+          # /definitely-missing -> 404. not_found_handling is deliberately
+          # omitted (see wrangler.toml): there is no dist/404.html to serve, and
+          # a SPA fallback would turn every typo on this prerendered MPA into a
+          # misleading 200. A generic edge 404 is the correct behaviour.
+          status=$(fetch -o /dev/null -w '%{http_code}' "${PREVIEW_URL}/definitely-missing")
+          if [ "$status" != "404" ]; then
+            echo "::error::GET /definitely-missing returned status ${status}, expected 404."
+            exit 1
+          fi
+          echo "OK: /definitely-missing returned 404."
+
+      - name: Comment preview URL on the PR
+        if: steps.preview.outputs.preview_url != ''
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
-          DEPLOY_URL: ${{ steps.deploy.outputs.deploy_url }}
-          DEPLOY_BRANCH: ${{ steps.branch.outputs.deploy_branch }}
+          PREVIEW_URL: ${{ steps.preview.outputs.preview_url }}
         with:
           script: |
-            const deployUrl = process.env.DEPLOY_URL;
-            const deployBranch = process.env.DEPLOY_BRANCH;
+            const previewUrl = process.env.PREVIEW_URL;
             const marker = '<!-- cf-preview-branch -->';
-            const body = `${marker}\n### Preview deployed\n\nBranch \`${deployBranch}\` is live at: ${deployUrl}\n\n_Updated for commit \`${context.sha.substring(0, 7)}\`._`;
+            const body = `${marker}\n### Preview deployed\n\nThis PR is live at: ${previewUrl}\n\n_Updated for commit \`${context.sha.substring(0, 7)}\`._`;
 
-            const { data: comments } = await github.rest.issues.listComments({
+            // Paginate — with the default page size an older marker comment on a
+            // long PR would be missed and a duplicate posted every run.
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
+              per_page: 100,
             });
             const existing = comments.find((c) => c.body && c.body.startsWith(marker));
 

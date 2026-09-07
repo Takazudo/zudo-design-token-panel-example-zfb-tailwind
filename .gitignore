@@ -7,3 +7,6 @@ zfb-tailwind-entry-*.css
 .zfb-esbuild-entry-*.tsx
 playwright-report/
 test-results/
+worktrees/
+# wrangler's local state/cache dir, created by `wrangler dev` and `deploy --dry-run`.
+.wrangler/

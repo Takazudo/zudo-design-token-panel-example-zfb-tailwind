@@ -9,27 +9,35 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "predev": "rm -rf dist .zfb .zfb-build",
-    "dev": "lsof -ti:44328 | xargs kill -9 2>/dev/null || true; lsof -ti:24686 | xargs kill -9 2>/dev/null || true; concurrently -k -n zfb,tokens-bin -c blue,green \"pnpm run _dev:zfb\" \"pnpm run _dev:tokens-bin\"",
-    "_dev:zfb": "zfb dev --port 44328",
-    "_dev:tokens-bin": "zdtp-server --write-root . --routing scaffold.routing.json --port 24686 --allow-origin http://localhost:44328",
+    "predev": "rm -rf dist .zfb .zfb-build zfb-tailwind-entry-*.css",
+    "dev": "node scripts/launch.mjs dev",
+    "_dev:zfb": "node scripts/launch.mjs dev:zfb",
+    "_dev:tokens-bin": "node scripts/launch.mjs dev:sidecar",
     "build": "zfb build",
-    "preview": "zfb preview",
+    "preview": "node scripts/launch.mjs preview",
     "typecheck": "zfb check",
+    "assert:theme-chain": "node scripts/assert-theme-chain.mjs --self-test",
+    "test:unit": "node --test \"tests/plugin/*.test.mjs\"",
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@takazudo/zdtp": "0.2.2",
-    "@takazudo/zfb": "0.1.0-next.45",
-    "@takazudo/zfb-runtime": "0.1.0-next.45",
+    "@takazudo/zdtp": "0.5.1",
+    "@takazudo/zfb": "2.15.1",
+    "@takazudo/zfb-runtime": "2.15.1",
     "preact": "^10.29.1",
-    "preact-render-to-string": "^6.5.0",
-    "tailwindcss": "^4.1.0"
+    "preact-render-to-string": "^6.5.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@types/node": "^22.0.0",
-    "concurrently": "^9.2.1",
-    "typescript": "^5.9.3"
+    "concurrently": "^9.2.4",
+    "typescript": "^5.9.3",
+    "wrangler": "4.129.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "hono": "^4.12.34"
+    },
+    "onlyBuiltDependencies": ["esbuild", "sharp", "workerd"]
   }
 }

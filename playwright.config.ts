@@ -1,17 +1,48 @@
 /**
  * Playwright config for the zfb-tailwind example's e2e specs.
  *
- * webServer runs `zfb build && zfb preview` rather than `zfb dev`.
- * The dev server does NOT inject the islands.js script tag, so
- * `window.zfbTw` stays undefined in dev mode.
- * See Takazudo/zudo-front-builder#377 (closed — by-design).
+ * webServer builds, then serves the built output with `zfb preview`, and
+ * starts the `zdtp-server` sidecar alongside it — the apply-roundtrip spec
+ * POSTs to that sidecar, so without it a bare `pnpm test:e2e` could never pass.
+ * Both come up through `scripts/launch.mjs`, which is also what `pnpm dev` and
+ * `pnpm preview` use, so the ports and the sidecar's allowed CORS origins are
+ * resolved exactly once (`scripts/ports.mjs`) and cannot drift from this config.
  *
- * The bin sidecar (zdtp-server) is started separately for
- * the apply-roundtrip spec; that spec drives fetch() directly, so no
- * webServer entry is needed for it here.
+ * They are TWO webServer entries rather than one `concurrently` command on
+ * purpose: Playwright waits for every entry's port before the first spec runs,
+ * so the sidecar gets a readiness gate of its own. Behind a single entry only
+ * `PREVIEW_PORT` was waited on, and `apply-roundtrip.spec.ts` — the first spec
+ * file alphabetically, POSTing the sidecar with a bare `fetch` and no retry —
+ * would fail with ECONNREFUSED on any run where the sidecar bound second.
+ *
+ * Why preview rather than `zfb dev`: `zfb dev` does not inject the
+ * `<script type="module" src="/assets/islands-*.js">` tag, so the Preact island
+ * holding PanelMount never hydrates and `window.zfbTw` stays undefined
+ * (Takazudo/zudo-front-builder#377, closed by-design). Re-verified against zfb
+ * 2.15.1 with `dist/` removed — still true. Watch out when re-probing: a
+ * leftover `dist/` masks it, because `zfb dev` serves the prebuilt
+ * `dist/index.html` statically and the islands tag then appears to be there.
+ *
+ * `reuseExistingServer: false`, in CI and locally alike: preview serves a
+ * *built* `dist/`, so reusing a server someone left running would silently test
+ * a stale build — the exact false-green this harness exists to remove. Failing
+ * on EADDRINUSE is the louder, more honest outcome. To test against a server
+ * you are already running, pass `BASE_URL`; that hands the whole server
+ * lifecycle — site AND sidecar — back to the caller. See README.md.
+ *
+ * The `undefined` branch keys off `BASE_URL` only, deliberately NOT off `CI`.
+ * `deploy.yml` has no e2e step today, so a CI-gated `undefined` would be
+ * invisible now and would silently strip the servers off the first CI run that
+ * did add one — specs that pass because nothing was served are the failure mode
+ * this whole harness pass is about.
  */
 
 import { defineConfig, devices } from '@playwright/test';
+// The three ports resolve in exactly one place so package.json's launcher,
+// plugins/dev-apply-proxy.mjs, the specs and this config cannot disagree.
+import { PREVIEW_PORT, ZDTP_PORT, BROWSER_ORIGIN } from './scripts/ports.mjs';
+
+const hasExternalBaseUrl = Boolean(process.env.BASE_URL);
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -23,7 +54,7 @@ export default defineConfig({
   maxFailures: 0,
   timeout: process.env.CI ? 90_000 : 60_000,
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:4173',
+    baseURL: BROWSER_ORIGIN,
     trace: 'on-first-retry',
     viewport: { width: 1280, height: 720 },
     ignoreHTTPSErrors: true,
@@ -36,10 +67,26 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'pnpm run build && pnpm exec zfb preview --port 4173',
-    url: 'http://localhost:4173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-  },
+  webServer: hasExternalBaseUrl
+    ? undefined
+    : [
+        {
+          // Build first so the islands script tag is injected, then serve the
+          // built output.
+          command: 'pnpm run build && node scripts/launch.mjs preview',
+          port: PREVIEW_PORT,
+          reuseExistingServer: false,
+          // Build can take ~30–60 s in CI.
+          timeout: 180_000,
+        },
+        {
+          // The sidecar apply-roundtrip.spec.ts POSTs to. Its own entry, so
+          // Playwright blocks on ZDTP_PORT too instead of assuming it is up by
+          // the time the preview port opens.
+          command: 'node scripts/launch.mjs dev:sidecar',
+          port: ZDTP_PORT,
+          reuseExistingServer: false,
+          timeout: 60_000,
+        },
+      ],
 });

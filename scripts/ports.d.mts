@@ -1,0 +1,11 @@
+export declare const DEFAULT_ZFB_PORT: number;
+export declare const DEFAULT_ZDTP_PORT: number;
+export declare const DEFAULT_PREVIEW_PORT: number;
+export declare function resolvePort(envVar: string, fallback: number): number;
+export declare const ZFB_PORT: number;
+export declare const ZDTP_PORT: number;
+export declare const PREVIEW_PORT: number;
+export declare const DEV_ORIGIN: string;
+export declare const PREVIEW_ORIGIN: string;
+export declare const BROWSER_ORIGIN: string;
+export declare const SIDECAR_ALLOWED_ORIGINS: string[];
