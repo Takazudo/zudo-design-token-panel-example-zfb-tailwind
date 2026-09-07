@@ -1,9 +1,10 @@
 # Cloudflare Workers (static assets) deploy for this zfb example.
 #
-#   build   — always runs (push + PR): install, typecheck (`zfb check`), build
-#             (`zfb build`), and parse wrangler.toml. Needs no Cloudflare
-#             credentials, so a fresh clone or a fork is green immediately.
-#             This is the real correctness gate.
+#   build   — always runs (push + PR): install, audit (`pnpm audit`), typecheck
+#             (`zfb check`), build (`zfb build`), assert the Tailwind @theme
+#             chain over the built CSS, and parse wrangler.toml. Needs no
+#             Cloudflare credentials, so a fresh clone or a fork is green
+#             immediately. This is the real correctness gate.
 #   deploy  — push to `main` only: `wrangler deploy` (uploads the Worker AND
 #             attaches the custom domain from wrangler.toml).
 #   preview — pull requests only: uploads a preview version, asserts the
@@ -20,11 +21,6 @@
 # No `branches:` filter on `pull_request` below — sub-PRs in this repo target
 # stacked base branches (e.g. `base/workers-migration-deps`), not `main`
 # directly. A `[main]` filter would give those PRs no CI at all.
-#
-# The audit gate (`pnpm audit --audit-level high`) is deliberately NOT added
-# here. Wave 1's pre-epic baseline recorded 1 critical + 1 high finding on
-# this repo's dependency tree — adding the gate now would make this build red
-# for a reason this wave cannot fix. It lands once the findings are cleared.
 #
 # Enable deploys by adding, in repo Settings -> Secrets and variables -> Actions:
 #   CLOUDFLARE_API_TOKEN   token with Account · Workers Scripts: Edit,
@@ -67,11 +63,43 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Keeps the audit fixed rather than fixed-once. The tree is clean at
+      # EVERY severity as of this commit (Wave 1's pre-epic baseline was
+      # 1 critical / 1 high / 6 moderate / 1 low), so `high` is a gate with
+      # headroom, not a tolerated-debt line: a newly published moderate cannot
+      # block an unrelated PR, while the critical+high classes this repo had
+      # to clear cannot come back silently.
+      #
+      # It runs BEFORE typecheck/build so a supply-chain regression is the
+      # first thing the log shows, not a footnote after the build.
+      #
+      # NOTE: `pnpm audit` queries the registry advisory DB live, so this step
+      # can turn red on a commit that changed nothing — that is the point, but
+      # it means a red gate here is triaged by bumping the offending dep, never
+      # by lowering `--audit-level`. This repo's hono floor is DECLARED
+      # (`pnpm.overrides`) rather than resolved, precisely because
+      # `--frozen-lockfile` would otherwise reinstall whatever the lockfile
+      # happened to capture, forever.
+      - name: Audit dependencies
+        run: pnpm audit --audit-level high
+
       - name: Typecheck
         run: pnpm typecheck
 
       - name: Build
         run: pnpm build
+
+      # The only check in this repo that can see a silently-empty Tailwind
+      # utility layer. zfb wraps a native binary embedding its own Tailwind
+      # compiler, so a zfb upgrade can stop compiling the @theme block while
+      # `zfb build` still succeeds and every route still returns 200 with the
+      # right <title> — which is exactly what the routing matrix below
+      # asserts, so it would not notice. Reads ./dist, so it must follow the
+      # build. `--self-test` (wired into the npm script) first proves the
+      # assertion still fails on mangled CSS, so a check that has quietly
+      # stopped asserting cannot report green.
+      - name: Assert Tailwind @theme chain
+        run: pnpm run assert:theme-chain
 
       # Runs AFTER the build (it reads ./dist) and needs no Cloudflare
       # credentials, so this is the only place wrangler.toml is parsed on a
