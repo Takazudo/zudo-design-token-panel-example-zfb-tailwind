@@ -18,19 +18,21 @@ import { defineConfig } from "@takazudo/zfb/config";
  * Apply-pipeline (dev only)
  * -------------------------
  * The `dev-apply-proxy` plugin intercepts POST /api/dev/apply and forwards it
- * to the bin sidecar at http://127.0.0.1:24686/apply.
+ * to the bin sidecar on 127.0.0.1. No port is written down here or in the
+ * plugin: `scripts/ports.mjs` is the single resolver, reading `ZFB_PORT` /
+ * `ZDTP_PORT` / `PREVIEW_PORT` (defaults offset by +1 from the plain zfb demo
+ * so both examples can run at once) and validating each one. The plugin, the
+ * `pnpm dev` launcher, Playwright's config and the sidecar's `--allow-origin`
+ * list all import from it, so they cannot drift apart.
  *
  * With `base: '/'`, the bare path /api/dev/apply is the correct registration
  * target — per zfb issue #229 (fix commit b1049ef), devMiddleware handlers are
  * scoped under the project base, so a bare path resolves correctly when base is '/'.
  *
- * Port 24686 (tokens-bin) and 44328 (zfb dev) are offset by +1 from the
- * plain zfb demo to avoid collision when both run simultaneously.
- *
  * Deploy `base`
  * -------------
- * `base: '/'` — this repo deploys at the root of its own Cloudflare Pages
- * project (zudo-design-token-panel-example-zfb-tailwind.pages.dev).
+ * `base: '/'` — this repo deploys at the root of its own Cloudflare Worker
+ * (Workers Static Assets) at zdtp-zfb-tailwind.zudolab.dev.
  */
 export default defineConfig({
   framework: "preact",

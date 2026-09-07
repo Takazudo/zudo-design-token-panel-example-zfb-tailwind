@@ -12,8 +12,16 @@
  * Each token row has a `.tokenpanel-highlight-toggle` button (eye icon).
  * Clicking it activates a CSS outline overlay on matching DOM elements.
  * The gear button (`.tokenpanel-gear-btn`) opens a settings popover
- * (`.tokenpanel-highlight-settings-popover`) which contains "Disable all
- * highlights" and "Reset to defaults" buttons.
+ * (`.tokenpanel-highlight-settings-popover`) whose footer contains "Disable all
+ * highlights" and "Reset to defaults".
+ *
+ * Verified against zdtp 0.5.1: the gear registers in the header's `header-right`
+ * slot region, which renders directly and is NOT folded into the 0.5.1
+ * `Panel actions` menu (`.tokenpanel-actions-menu-btn`) — only slots flagged
+ * `renderInCompactMenu` go there, and the gear is not one. "Disable all
+ * highlights" is still the popover footer's own button, so the gear path below
+ * is current, not legacy. This spec is structural throughout and never asserts
+ * the panel's brand title, so 0.5.1's title-literal change does not reach it.
  *
  * Route inventory (6 routes):
  *   /                       → Home
@@ -25,16 +33,23 @@
  *
  * Prerequisites
  * -------------
- *  - zfb preview server on port 4173 (started by playwright.config.ts webServer).
- *    IMPORTANT: must be `zfb preview`, NOT `zfb dev` — dev mode does not inject
- *    the islands.js script tag so `window.zfbTw` stays undefined.
- *    See Takazudo/zudo-front-builder#377 (closed — by-design).
+ *  - `zfb preview` serving the BUILT output, started by playwright.config.ts's
+ *    webServer. It must be preview, not `zfb dev`: dev injects no islands
+ *    script tag, so `window.zfbTw` stays undefined
+ *    (Takazudo/zudo-front-builder#377, closed — by-design; still true at zfb
+ *    2.15.1).
+ *  - No port appears in this file. `scripts/ports.mjs` resolves them from
+ *    `ZFB_PORT` / `ZDTP_PORT` / `PREVIEW_PORT` (or `BASE_URL`) and
+ *    playwright.config.ts derives `baseURL` from it, so the relative paths
+ *    below follow whatever port this worktree is on.
  */
 
 import { test, expect } from '@playwright/test';
-
-const STORAGE_PREFIX = 'zfb-tailwind-example-tokens';
-const STORAGE_KEY_VISIBLE = `${STORAGE_PREFIX}:visible`;
+import {
+  STORAGE_PREFIX,
+  STORAGE_KEY_VISIBLE,
+  closePanelAndClearStorage,
+} from './panel-storage';
 
 const ROUTES = [
   { label: 'Home',    path: '/' },
@@ -96,6 +111,8 @@ test.describe('zfb-tailwind — highlight: panel toggles on every primary route'
       const toggles = page.locator('.tokenpanel-highlight-toggle');
       const toggleCount = await toggles.count();
       expect(toggleCount).toBeGreaterThan(0);
+
+      await closePanelAndClearStorage(page);
     });
   }
 });
@@ -140,6 +157,8 @@ test.describe('zfb-tailwind — highlight: activate + disable-all via gear popov
 
     // Step 6: assert no highlight toggles are active.
     await expect(page.locator('.tokenpanel-highlight-toggle.is-active')).toHaveCount(0, { timeout: 3_000 });
+
+    await closePanelAndClearStorage(page);
   });
 });
 
@@ -174,5 +193,7 @@ test.describe('zfb-tailwind — highlight: window.zfbTw console API available on
     expect(apiShape.hasToggle).toBe(true);
     expect(apiShape.hasShow).toBe(true);
     expect(apiShape.hasHide).toBe(true);
+
+    await closePanelAndClearStorage(page);
   });
 });

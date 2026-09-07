@@ -20,7 +20,9 @@
     "config/**/*",
     "styles/**/*",
     "plugins/**/*",
-    "zfb.config.ts"
+    "tests/**/*",
+    "zfb.config.ts",
+    "playwright.config.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

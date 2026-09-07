@@ -34,16 +34,29 @@
  * with aria-label "--zfbtw-palette-N: #hexvalue". Tweaking via the :root CSS var
  * override mechanism is validated via computed style assertions.
  *
+ * Exact computed values, not "it changed"
+ * ---------------------------------------
+ * Each assertion below pins the concrete px the cascade must land on rather
+ * than `not.toBe(before)`. A "changed" assertion passes when a value moves for
+ * an entirely unrelated reason — a layout shift, a different element matching
+ * the selector — which is precisely the false-green this spec is the epic's
+ * proof against. The figures assume the default 16px root font size.
+ *
  * Prerequisites
  * -------------
- *  - zfb preview server on port 4173 (started by playwright.config.ts webServer).
- *    IMPORTANT: must be `zfb preview`, NOT `zfb dev`.
- *    See Takazudo/zudo-front-builder#377 (closed — by-design).
+ *  - `zfb preview` serving the BUILT output, started by playwright.config.ts's
+ *    webServer. It must be preview, not `zfb dev`: dev injects no islands
+ *    script tag, so `window.zfbTw` stays undefined
+ *    (Takazudo/zudo-front-builder#377, closed — by-design; still true at zfb
+ *    2.15.1).
+ *  - Ports are not hard-coded anywhere. `scripts/ports.mjs` resolves them from
+ *    `ZFB_PORT` / `ZDTP_PORT` / `PREVIEW_PORT` (or `BASE_URL`), and
+ *    playwright.config.ts derives `baseURL` from the same resolver — so the
+ *    relative paths below follow whatever port this worktree is on.
  */
 
 import { test, expect } from '@playwright/test';
-
-const STORAGE_PREFIX = 'zfb-tailwind-example-tokens';
+import { STORAGE_PREFIX, closePanelAndClearStorage } from './panel-storage';
 
 /** Open the page, seed localStorage, reload so the panel island boots eagerly. */
 async function openPageWithPanel(page: import('@playwright/test').Page, path: string) {
@@ -97,11 +110,12 @@ test.describe('zfb-tailwind — token-tweak: font-scale', () => {
     // `<p class="text-scale-xs text-muted">` directly consuming --zfbtw-scale-xs.
     const xsTextEl = page.locator('.text-scale-xs').first();
 
-    const beforeSize = await xsTextEl.evaluate((el) => {
-      return window.getComputedStyle(el).fontSize;
-    });
+    // Default --zfbtw-scale-xs is 0.75rem = 12px.
+    await expect
+      .poll(async () => xsTextEl.evaluate((el) => window.getComputedStyle(el).fontSize))
+      .toBe('12px');
 
-    // Set to a clearly different value (0.625rem = 10px).
+    // 0.625rem = 10px.
     await scaleXsInput.fill('0.625');
     await scaleXsInput.press('Enter');
 
@@ -112,11 +126,16 @@ test.describe('zfb-tailwind — token-tweak: font-scale', () => {
         },
         { timeout: 5_000, intervals: [100, 250, 500] },
       )
-      .not.toBe(beforeSize);
+      .toBe('10px');
 
-    // Restore original value.
+    // Restore original value, and confirm the restore actually took.
     await scaleXsInput.fill('0.75');
     await scaleXsInput.press('Enter');
+    await expect
+      .poll(async () => xsTextEl.evaluate((el) => window.getComputedStyle(el).fontSize))
+      .toBe('12px');
+
+    await closePanelAndClearStorage(page);
   });
 });
 
@@ -142,15 +161,16 @@ test.describe('zfb-tailwind — token-tweak: spacing (Tailwind @theme cascade)',
     // cascade: gap-vsp-lg → gap: var(--spacing-vsp-lg) → var(--zfbtw-vsp-lg) → 1.75rem
     const gapEl = page.locator('.gap-vsp-lg').first();
 
-    const beforeGap = await gapEl.evaluate((el) => {
-      return window.getComputedStyle(el).gap;
-    });
+    // Default --zfbtw-vsp-lg is 1.75rem = 28px.
+    await expect
+      .poll(async () => gapEl.evaluate((el) => window.getComputedStyle(el).gap))
+      .toBe('28px');
 
-    // Tweak to 2.5rem — clearly different from the default 1.75rem.
+    // 2.5rem = 40px.
     await vspLgInput.fill('2.5');
     await vspLgInput.press('Enter');
 
-    // Assert the computed gap changed (full cascade: panel → CSS var → Tailwind @theme → utility).
+    // Full cascade: panel → --zfbtw-vsp-lg → --spacing-vsp-lg → gap-vsp-lg.
     await expect
       .poll(
         async () => {
@@ -158,11 +178,16 @@ test.describe('zfb-tailwind — token-tweak: spacing (Tailwind @theme cascade)',
         },
         { timeout: 5_000, intervals: [100, 250, 500] },
       )
-      .not.toBe(beforeGap);
+      .toBe('40px');
 
-    // Restore.
+    // Restore, and confirm the restore actually took.
     await vspLgInput.fill('1.75');
     await vspLgInput.press('Enter');
+    await expect
+      .poll(async () => gapEl.evaluate((el) => window.getComputedStyle(el).gap))
+      .toBe('28px');
+
+    await closePanelAndClearStorage(page);
   });
 
   test('tweaking --zfbtw-hsp-md updates computed padding on px-hsp-md element', async ({ page }) => {
@@ -181,11 +206,12 @@ test.describe('zfb-tailwind — token-tweak: spacing (Tailwind @theme cascade)',
     //   px-hsp-md → padding-inline: var(--spacing-hsp-md) → var(--zfbtw-hsp-md) → 1rem
     const cardEl = page.locator('.px-hsp-md').first();
 
-    const beforePadding = await cardEl.evaluate((el) => {
-      return window.getComputedStyle(el).paddingLeft;
-    });
+    // Default --zfbtw-hsp-md is 1rem = 16px.
+    await expect
+      .poll(async () => cardEl.evaluate((el) => window.getComputedStyle(el).paddingLeft))
+      .toBe('16px');
 
-    // Tweak to 2rem.
+    // 2rem = 32px.
     await hspMdInput.fill('2');
     await hspMdInput.press('Enter');
 
@@ -196,11 +222,16 @@ test.describe('zfb-tailwind — token-tweak: spacing (Tailwind @theme cascade)',
         },
         { timeout: 5_000, intervals: [100, 250, 500] },
       )
-      .not.toBe(beforePadding);
+      .toBe('32px');
 
-    // Restore.
+    // Restore, and confirm the restore actually took.
     await hspMdInput.fill('1');
     await hspMdInput.press('Enter');
+    await expect
+      .poll(async () => cardEl.evaluate((el) => window.getComputedStyle(el).paddingLeft))
+      .toBe('16px');
+
+    await closePanelAndClearStorage(page);
   });
 });
 
@@ -271,6 +302,8 @@ test.describe('zfb-tailwind — token-tweak: palette color', () => {
 
     // Close the color picker by clicking outside.
     await page.keyboard.press('Escape');
+
+    await closePanelAndClearStorage(page);
   });
 
   test('--zfbtw-palette-1 CSS var on :root reflects panel tweak', async ({ page }) => {
@@ -316,5 +349,7 @@ test.describe('zfb-tailwind — token-tweak: palette color', () => {
       .not.toBe(beforeColor);
 
     await page.keyboard.press('Escape');
+
+    await closePanelAndClearStorage(page);
   });
 });
