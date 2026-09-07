@@ -86,6 +86,14 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Guards plugins/dev-apply-proxy.mjs's header forwarding. That proxy
+      # shipped forwarding `content-type` only, which 403s every panel-driven
+      # Apply, and no browser spec can see it (apply-roundtrip.spec.ts POSTs the
+      # sidecar directly and sets Origin itself). node:test only, no build and no
+      # browser needed, so it belongs in this credential-free gate.
+      - name: Unit tests
+        run: pnpm test:unit
+
       - name: Build
         run: pnpm build
 

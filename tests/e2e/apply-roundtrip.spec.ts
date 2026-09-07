@@ -111,7 +111,22 @@ test.describe('zfb-tailwind — apply pipeline round-trip', () => {
     // read from an already-corrupted file.
     if (!originalValue) return;
     await postApply(TARGET_VAR, originalValue);
-    expect(await readTokenValue(TARGET_VAR)).toBe(originalValue);
+    // Poll, exactly as the in-band restore does: the sidecar's disk write is not
+    // guaranteed to be visible the instant its response lands, and a bare read
+    // here would fail the whole suite in the abnormal-exit case this hook exists
+    // for — reporting a phantom restore failure over the real error.
+    await expect
+      .poll(
+        async () => {
+          try {
+            return await readTokenValue(TARGET_VAR);
+          } catch {
+            return '';
+          }
+        },
+        { timeout: 5_000, intervals: [100, 250, 500] },
+      )
+      .toBe(originalValue);
   });
 
   test('postApply() rewrites a token directly via the bin sidecar', async () => {

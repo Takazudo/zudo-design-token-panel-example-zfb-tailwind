@@ -47,7 +47,7 @@
 import { test, expect } from '@playwright/test';
 import {
   STORAGE_PREFIX,
-  STORAGE_KEY_VISIBLE,
+  setPanelVisibleFlag,
   closePanelAndClearStorage,
 } from './panel-storage';
 
@@ -170,9 +170,7 @@ test.describe('zfb-tailwind — highlight: window.zfbTw console API available on
   test('window.zfbTw is defined and has toggleDesignPanel', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.evaluate((key) => {
-      localStorage.setItem(key, '1');
-    }, STORAGE_KEY_VISIBLE);
+    await setPanelVisibleFlag(page);
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
 

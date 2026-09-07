@@ -78,7 +78,9 @@ const CHAIN = [
   },
 ];
 
-const ASSETS_DIR = "dist/assets";
+const DIST_DIR = "dist";
+const ASSETS_DIR = join(DIST_DIR, "assets");
+const ENTRY_HTML = join(DIST_DIR, "index.html");
 
 function escapeRe(literal) {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -149,8 +151,46 @@ function checkChain(rawCss) {
   return failures;
 }
 
+/**
+ * Resolve the stylesheet the built site actually serves.
+ *
+ * Filenames are content-hashed per build, so the path has to be discovered —
+ * but `zfb build` does NOT clear dist/ first, so any checkout built more than
+ * once accumulates several `assets/styles-*.css`. Requiring exactly one made
+ * this check unrunnable on a normal working copy (and, worse, would have been
+ * a coin flip between a fresh and a stale file). The `<link>` in
+ * dist/index.html names the one the site loads, which is the only one worth
+ * asserting; the directory scan stays as the fallback for a build shape that
+ * no longer emits that tag.
+ */
 function findBuiltCss(explicitPath) {
   if (explicitPath) return explicitPath;
+
+  let html = null;
+  try {
+    html = readFileSync(ENTRY_HTML, "utf8");
+  } catch {
+    // Fall through to the directory scan, which reports the missing build.
+  }
+  if (html !== null) {
+    const linked = [
+      ...new Set(
+        [
+          ...html.matchAll(
+            /href\s*=\s*["'][^"']*\/assets\/(styles-[^"'/]+\.css)["']/g,
+          ),
+        ].map((m) => m[1]),
+      ),
+    ];
+    if (linked.length === 1) return join(ASSETS_DIR, linked[0]);
+    if (linked.length > 1) {
+      throw new Error(
+        `${ENTRY_HTML} links ${linked.length} stylesheets (${linked.join(", ")}); ` +
+          "pass the one to check as an argument.",
+      );
+    }
+  }
+
   let entries;
   try {
     entries = readdirSync(ASSETS_DIR).filter(
@@ -162,10 +202,9 @@ function findBuiltCss(explicitPath) {
     );
   }
   if (entries.length !== 1) {
-    // Filenames are content-hashed per build, so this must be discovered, and
-    // a stale file left beside a fresh one would make the check ambiguous.
     throw new Error(
-      `expected exactly one ${ASSETS_DIR}/styles-*.css, found ${entries.length}: ${entries.join(", ")}`,
+      `${ENTRY_HTML} names no assets/styles-*.css and ${ASSETS_DIR}/ holds ` +
+        `${entries.length} candidates (${entries.join(", ")}) — pass the one to check as an argument.`,
     );
   }
   return join(ASSETS_DIR, entries[0]);
