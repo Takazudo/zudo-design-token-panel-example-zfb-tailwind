@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@takazudo/zdtp':
-        specifier: 0.2.2
-        version: 0.2.2(preact@10.29.2)
+        specifier: 0.5.1
+        version: 0.5.1(preact@10.29.2)
       '@takazudo/zfb':
         specifier: 0.1.0-next.45
         version: 0.1.0-next.45
@@ -444,8 +444,11 @@ packages:
   '@speed-highlight/core@1.2.24':
     resolution: {integrity: sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw==}
 
-  '@takazudo/zdtp@0.2.2':
-    resolution: {integrity: sha512-tiO5WgRGXKUG+vl/pPLybdUSysTu2qXXA8VE4te5GhJabn13kUe2Icj+UCz0mwhA/Vg1HV2sBW4ZR/5mQIbbfw==}
+  '@tailwindcss/browser@4.3.2':
+    resolution: {integrity: sha512-R6hewP9HHwLAY88bFkgAYFIQMRGi9bqx6sR1anI3IThTJtwhPlAm4aHIzDKrnJ8Ct4M3d5A9PCsah8Z5+EjLiQ==}
+
+  '@takazudo/zdtp@0.5.1':
+    resolution: {integrity: sha512-zxKMKsgzWpEpmmj749vAnBryDzYI4tH4WDq7g2eMOuNpixPmLTq8hevMro5kNCZokybb/tjy0LpZhVX6tJ7U6w==}
     engines: {node: '>=22.0.0', pnpm: '>=10.0.0'}
     hasBin: true
     peerDependencies:
@@ -645,6 +648,9 @@ packages:
   supports-color@8.1.1:
     resolution: {integrity: sha512-MpUEN2OodtUzxvKQl72cUF7RQ5EiHsGvSsVG0ia9c5RbWGL2CI4C7EpPS8UTBIplnlzZiNuV56w+FuNxy3ty2Q==}
     engines: {node: '>=10'}
+
+  tailwind-merge@3.6.0:
+    resolution: {integrity: sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w==}
 
   tailwindcss@4.3.0:
     resolution: {integrity: sha512-y6nxMGB1nMW9R6k96e5gdIFzcfL/gTJRNaqGes1YvkLnPVXzWgbqFF2yLC0T8G774n24cx3Pe8XrKoniCOAH+Q==}
@@ -967,10 +973,14 @@ snapshots:
 
   '@speed-highlight/core@1.2.24': {}
 
-  '@takazudo/zdtp@0.2.2(preact@10.29.2)':
+  '@tailwindcss/browser@4.3.2': {}
+
+  '@takazudo/zdtp@0.5.1(preact@10.29.2)':
     dependencies:
+      '@tailwindcss/browser': 4.3.2
       culori: 4.0.2
       preact: 10.29.2
+      tailwind-merge: 3.6.0
 
   '@takazudo/zfb-darwin-arm64@0.1.0-next.45':
     optional: true
@@ -1186,6 +1196,8 @@ snapshots:
   supports-color@8.1.1:
     dependencies:
       has-flag: 4.0.0
+
+  tailwind-merge@3.6.0: {}
 
   tailwindcss@4.3.0: {}
 
