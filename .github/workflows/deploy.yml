@@ -106,7 +106,10 @@ jobs:
       # build. `--self-test` (wired into the npm script) first proves the
       # assertion still fails on mangled CSS, so a check that has quietly
       # stopped asserting cannot report green.
-      - name: Assert Tailwind @theme chain
+      - name: Audit generated utilities
+        run: pnpm audit:wind
+
+      - name: Assert utility token chain
         run: pnpm run assert:theme-chain
 
       # Runs AFTER the build (it reads ./dist) and needs no Cloudflare

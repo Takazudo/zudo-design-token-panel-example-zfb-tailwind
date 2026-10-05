@@ -1,36 +1,29 @@
 #!/usr/bin/env node
 /**
- * Assert the `@theme` chain survived the build, over the BUILT CSS.
+ * Assert the authored-token chain survived the build, over the BUILT CSS.
  *
- * Why this exists
- * ---------------
- * zfb wraps a native binary that embeds its own Tailwind compiler, so the
- * `@theme` block in styles/global.css is compiled by a build TOOL, not by a
- * declared npm dependency this repo controls. If a zfb upgrade changed how it
- * feeds that block to Tailwind, the utility layer would come out EMPTY — and
- * every route would still return 200 with a well-formed page. Nothing else in
- * this repo notices: `zfb build` succeeds, `zfb check` passes, the CI routing
- * matrix asserts `<title>`s that do not depend on any utility class. That is
- * the silent failure this script exists to make loud.
+ * zfb generates utility CSS from zfb.config.ts. A successful page build alone
+ * cannot prove that utilities consume the authored tokens. This check rejects
+ * missing utilities and broken generated-variable links independently.
  *
  * What it asserts, per row of the chain
  * -------------------------------------
  *   1. the utility rule exists AND declares the right property from the right
- *      theme var  (`.gap-vsp-lg { gap: var(--spacing-vsp-lg) }`)
+ *      theme var  (`.gap-vsp-lg { gap: var(--zw-spacing-vsp-lg) }`)
  *   2. the theme layer resolves that var back to this repo's raw token
- *      (`:root { --spacing-vsp-lg: var(--zfbtw-vsp-lg) }`)
+ *      (`:root { --zw-spacing-vsp-lg: var(--zfbtw-vsp-lg) }`)
  *
  * Both halves are needed: a present selector with a hard-coded value, or a
  * theme var that no utility consumes, are each a broken chain that a
  * selector-only grep would pass.
  *
  * `.h-size-header-h` is the load-bearing row. The other three are also covered
- * at runtime by tests/token-tweak-style.spec.ts, but the `--spacing-size-*`
- * namespace has NO spec coverage at all — it is the one part of the @theme
- * block that could vanish with nothing else noticing.
+ * at runtime by tests/token-tweak-style.spec.ts, but the `--zw-size-*`
+ * namespace has NO spec coverage at all — it is the one part of the configured token
+ * mapping that could vanish with nothing else noticing.
  *
- * The three namespaces are genuinely distinct (`--spacing-*`, `--text-*`,
- * `--spacing-size-*`); asserting only one would leave two thirds uncovered.
+ * The three namespaces are genuinely distinct (`--zw-spacing-*`, `--zw-font-size-*`,
+ * `--zw-size-*`); asserting only one would leave two thirds uncovered.
  *
  * Usage
  * -----
@@ -46,35 +39,35 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-/** One row of the token -> @theme -> utility chain. */
+/** One row of the token -> wind config -> utility chain. */
 const CHAIN = [
   {
     utility: "gap-vsp-lg",
     property: "gap",
-    themeVar: "--spacing-vsp-lg",
+    themeVar: "--zw-spacing-vsp-lg",
     rawVar: "--zfbtw-vsp-lg",
-    namespace: "--spacing-*",
+    namespace: "--zw-spacing-*",
   },
   {
     utility: "px-hsp-md",
     property: "padding-inline",
-    themeVar: "--spacing-hsp-md",
+    themeVar: "--zw-spacing-hsp-md",
     rawVar: "--zfbtw-hsp-md",
-    namespace: "--spacing-*",
+    namespace: "--zw-spacing-*",
   },
   {
     utility: "text-scale-xs",
     property: "font-size",
-    themeVar: "--text-scale-xs",
+    themeVar: "--zw-font-size-scale-xs",
     rawVar: "--zfbtw-scale-xs",
-    namespace: "--text-*",
+    namespace: "--zw-font-size-*",
   },
   {
     utility: "h-size-header-h",
     property: "height",
-    themeVar: "--spacing-size-header-h",
+    themeVar: "--zw-size-size-header-h",
     rawVar: "--zfbtw-size-header-h",
-    namespace: "--spacing-size-*",
+    namespace: "--zw-size-*",
   },
 ];
 
@@ -100,7 +93,7 @@ function normalize(css) {
 function ruleBodiesFor(css, className) {
   // `(?<![\w.#-])` rejects `.foo.gap-vsp-lg` and `.x-gap-vsp-lg`; `(?![\w-])`
   // rejects `.gap-vsp-lg-2`. The optional `,...` tail keeps the check working
-  // if a future Tailwind groups the utility into a selector list.
+  // if a future compiler groups the utility into a selector list.
   const re = new RegExp(
     `(?<![\\w.#-])\\.${escapeRe(className)}(?![\\w-])(?:\\s*,[^{}]*?)?\\s*\\{([^{}]*)\\}`,
     "g",
@@ -144,7 +137,7 @@ function checkChain(rawCss) {
     if (!rootBodies.some((b) => declaresVar(b, row.themeVar, row.rawVar))) {
       failures.push(
         `${row.themeVar} — no :root declaration resolving it to \`var(${row.rawVar})\`; ` +
-          `the @theme block did not reach the built CSS.`,
+          `the configured token mapping did not reach the built CSS.`,
       );
     }
   }
@@ -222,7 +215,7 @@ function findBuiltCss(explicitPath) {
 function mangles(css) {
   const first = CHAIN[0];
   const last = CHAIN[CHAIN.length - 1];
-  const utilitiesLayerAt = css.indexOf("@layer utilities");
+
 
   const selectorRe = new RegExp(
     `(?<![\\w.#-])\\.${escapeRe(last.utility)}(?![\\w-])`,
@@ -246,7 +239,7 @@ function mangles(css) {
       css: css.replace(utilityDeclRe, (_m, prefix) => `${prefix}3.5rem`),
     },
     {
-      name: `${last.themeVar} theme declaration deleted (chain cut at @theme)`,
+      name: `${last.themeVar} theme declaration deleted (chain cut at configured variable)`,
       css: css.replace(themeDeclRe(last), ""),
     },
     {
@@ -254,11 +247,11 @@ function mangles(css) {
       css: css.replace(themeDeclRe(first), `${first.themeVar}: 2rem;`),
     },
     {
-      name: "whole utilities layer emptied (the silent zfb-upgrade failure)",
+      name: "all checked utilities removed (the silent zfb-upgrade failure)",
       // -1 would make slice() drop a single character, i.e. a mangle that is
       // not a mangle. The no-op guard in the self-test loop catches that, but
       // this says WHY rather than leaving the reader to work it out.
-      css: utilitiesLayerAt === -1 ? css : css.slice(0, utilitiesLayerAt),
+      css: CHAIN.reduce((result, row) => result.replace(new RegExp(`\\.${escapeRe(row.utility)}\\s*\\{[^{}]*\\}`, "g"), ""), css),
     },
   ];
 }
@@ -316,16 +309,16 @@ function main() {
     }
     if (bad > 0) {
       console.error(
-        `\n@theme chain SELF-TEST FAILED (${bad}) — the assertion below cannot be trusted.`,
+        `\nUtility token chain SELF-TEST FAILED (${bad}) — the assertion below cannot be trusted.`,
       );
       process.exit(1);
     }
-    console.log("@theme chain self-test passed: the check fails when it should.\n");
+    console.log("Utility token chain self-test passed: the check fails when it should.\n");
   }
 
   const failures = checkChain(css);
   if (failures.length > 0) {
-    console.error(`\n@theme chain BROKEN in ${cssPath}:\n`);
+    console.error(`\nUtility token chain BROKEN in ${cssPath}:\n`);
     for (const f of failures) console.error(`  - ${f}`);
     console.error(
       "\nThis is the silent failure mode: every route still returns 200 with the\n" +
@@ -335,7 +328,7 @@ function main() {
     process.exit(1);
   }
 
-  console.log(`@theme chain intact in ${cssPath}:`);
+  console.log(`Utility token chain intact in ${cssPath}:`);
   for (const row of CHAIN) {
     console.log(
       `  .${row.utility} { ${row.property}: var(${row.themeVar}) }  <-  ${row.themeVar}: var(${row.rawVar})  [${row.namespace}]`,
@@ -346,6 +339,6 @@ function main() {
 try {
   main();
 } catch (err) {
-  console.error(`@theme chain check could not run: ${err.message}`);
+  console.error(`Utility token chain check could not run: ${err.message}`);
   process.exit(1);
 }

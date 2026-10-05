@@ -23,8 +23,7 @@
  * View Transitions
  * ----------------
  * <ClientRouter /> (in <head>) emits the opt-in meta tags and global CSS for the
- * zfb-runtime SPA router. The `<ClientRouterBootstrap>` island (when="load")
- * registers the browser-side click intercept by executing the side-effect import.
+ * zfb-runtime SPA router. zfb 3 injects its browser activation automatically.
  *
  * The topbar (<header>) and sidenav (<aside>) carry `data-zfb-transition-persist`
  * so zfb's DOM byte-move keeps the same DOM nodes across soft navigations, and the
@@ -37,9 +36,9 @@
  * panel adapter without repeating the boilerplate.
  */
 
-import { Island, type IslandProps } from '@takazudo/zfb';
+import { Island } from '@takazudo/zfb';
 import { ClientRouter } from '@takazudo/zfb-runtime';
-import ClientRouterBootstrap from './client-router-bootstrap';
+import type { Child } from '@takazudo/zfb/zudo-react';
 import PanelMount from './panel-mount';
 import { Sidenav } from './sidenav';
 import '../styles/global.css';
@@ -49,17 +48,17 @@ const BASE_PATH = '/';
 interface AppShellProps {
   title?: string;
   activePath?: string;
-  children: preact.ComponentChildren;
+  children: Child;
 }
 
 export function AppShell({ title = 'zfb + Tailwind v4 — Design Token Panel', activePath = BASE_PATH, children }: AppShellProps) {
   return (
     <html lang="en">
       <head>
-        <meta charSet="utf-8" />
+        <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{title}</title>
-        {ClientRouter({ fallback: 'animate' }) as unknown as preact.JSX.Element}
+        <ClientRouter fallback="animate" />
       </head>
       <body>
         {/* Topbar — persisted across soft navigations; no animation (CSS names it zfb-topbar) */}
@@ -78,14 +77,13 @@ export function AppShell({ title = 'zfb + Tailwind v4 — Design Token Panel', a
             Panel button click handler. Page body is SSR-only; the Island
             containing PanelMount runs client-side only. This inline script
             attaches a click listener at parse time, bridging the SSR/island gap.
-            Once PanelMount's useEffect installs window.zfbTw.toggleDesignPanel,
+            Once PanelMount's activation installs window.zfbTw.toggleDesignPanel,
             clicks invoke it.
           */}
           <script
-            dangerouslySetInnerHTML={{
-              __html:
-                "document.getElementById('zfbtw-panel-open')?.addEventListener('click',function(){var a=window.zfbTw;if(a&&typeof a.toggleDesignPanel==='function')a.toggleDesignPanel();});",
-            }}
+            rawHtml={
+                "document.getElementById('zfbtw-panel-open')?.addEventListener('click',function(){var a=window.zfbTw;if(a&&typeof a.toggleDesignPanel==='function')a.toggleDesignPanel();});"
+            }
           />
         </header>
 
@@ -105,22 +103,12 @@ export function AppShell({ title = 'zfb + Tailwind v4 — Design Token Panel', a
         </div>
 
         {/*
-          ClientRouterBootstrap registers the zfb-runtime SPA router click intercept.
-          Must use when="load" (not "visible") so the intercept is registered before
-          the user can click any link — "visible" risks a race where the island is
-          still deferred at first navigation.
-        */}
-        <Island when="load" ssrFallback={null}>
-          {(<ClientRouterBootstrap />) as unknown as IslandProps['children']}
-        </Island>
-
-        {/*
           PanelMount is the `"use client"` island that bootstraps the panel adapter.
           Uses `ssrFallback={null}` (the zfb equivalent of Astro's `client:only`)
           so the island's internals are NOT evaluated at SSR time.
         */}
         <Island when="visible" ssrFallback={null}>
-          {(<PanelMount />) as unknown as IslandProps['children']}
+          <PanelMount />
         </Island>
       </body>
     </html>

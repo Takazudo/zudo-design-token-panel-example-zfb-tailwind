@@ -71,7 +71,7 @@
  * Preact tree; this component owns no DOM of its own.
  */
 
-import { useEffect } from 'preact/hooks';
+import { getScope } from '@takazudo/zfb/zudo-react';
 import type { PanelConfig } from '@takazudo/zdtp/astro';
 import {
   EAGER_LOAD_GATE_KEY_SUFFIXES,
@@ -307,10 +307,10 @@ function mountPanel(): void {
 }
 
 export default function PanelMount() {
-  useEffect(() => {
+  getScope().onActivate(() => {
     mountPanel();
     // No cleanup: the panel adapter installs window-level state that lives
     // for the page lifetime. A teardown on unmount would be wrong.
-  }, []);
+  });
   return null;
 }

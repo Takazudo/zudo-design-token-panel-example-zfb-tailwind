@@ -1,3 +1,5 @@
+@import '@takazudo/zdtp/styles.css';
+
 /*
  * `--zfbtw-*` tokens + Tailwind v4 theme registration.
  *
@@ -135,102 +137,7 @@
                                   Menlo, Consolas, monospace;
 }
 
-/* ── Design token panel chrome ───────────────────────────────────────────── */
-/* Vite library mode strips the source CSS import from the emitted JS, so
-   consumers must re-pull it explicitly via this CSS import. */
-@import '@takazudo/zdtp/styles.css';
-
-/* ── Tailwind v4 ─────────────────────────────────────────────────────────── */
-@import "tailwindcss";
-
-/*
- * @theme block — maps --zfbtw-* raw vars onto Tailwind v4's
- * design-system namespace prefixes so that utility classes generate correctly.
- *
- * Namespace rules applied here:
- *   --color-*     → bg-*, text-*, border-*, …
- *   --spacing-*   → p-*, m-*, gap-*, w-*, h-*, …  (vsp tokens map here)
- *   --text-*      → text-* font-size utilities
- *   --leading-*   → leading-* line-height utilities
- *   --font-*      → font-* font-family utilities
- *   --radius-*    → rounded-* utilities
- *
- * Example utility chain: p-vsp-md
- *   CSS var:   --spacing-vsp-md: var(--zfbtw-vsp-md)
- *   Token:     --zfbtw-vsp-md: 1rem
- *   Resolves:  padding: 1rem
- */
-@theme {
-  /* Colour utilities: bg-primary, bg-surface, text-primary, border-muted, … */
-  --color-primary: var(--zfbtw-color-primary);
-  --color-accent:  var(--zfbtw-color-accent);
-  --color-surface: var(--zfbtw-color-surface);
-  --color-muted:   var(--zfbtw-color-muted);
-  --color-success: var(--zfbtw-color-success);
-  --color-warning: var(--zfbtw-color-warning);
-  --color-danger:  var(--zfbtw-color-danger);
-  --color-bg:      var(--zfbtw-bg);
-  --color-fg:      var(--zfbtw-fg);
-
-  /* Size utilities: w-size-sidenav-w, h-size-header-h, w-size-avatar-sm, etc.
-     Per G3: size tokens live under --spacing-size-* to generate w- and h- utilities */
-  --spacing-size-sidenav-w: var(--zfbtw-size-sidenav-w);
-  --spacing-size-header-h:  var(--zfbtw-size-header-h);
-  --spacing-size-avatar-sm: var(--zfbtw-size-avatar-sm);
-  --spacing-size-avatar-md: var(--zfbtw-size-avatar-md);
-  --spacing-size-icon-sm:   var(--zfbtw-size-icon-sm);
-  --spacing-size-icon-md:   var(--zfbtw-size-icon-md);
-
-  /* Vertical spacing utilities: p-vsp-md, m-vsp-xl, gap-vsp-lg, … */
-  --spacing-vsp-2xs: var(--zfbtw-vsp-2xs);
-  --spacing-vsp-xs:  var(--zfbtw-vsp-xs);
-  --spacing-vsp-sm:  var(--zfbtw-vsp-sm);
-  --spacing-vsp-md:  var(--zfbtw-vsp-md);
-  --spacing-vsp-lg:  var(--zfbtw-vsp-lg);
-  --spacing-vsp-xl:  var(--zfbtw-vsp-xl);
-  --spacing-vsp-2xl: var(--zfbtw-vsp-2xl);
-
-  /* Horizontal spacing utilities: px-hsp-md, pl-hsp-lg, … */
-  --spacing-hsp-xs:  var(--zfbtw-hsp-xs);
-  --spacing-hsp-sm:  var(--zfbtw-hsp-sm);
-  --spacing-hsp-md:  var(--zfbtw-hsp-md);
-  --spacing-hsp-lg:  var(--zfbtw-hsp-lg);
-  --spacing-hsp-xl:  var(--zfbtw-hsp-xl);
-
-  /* Raw font-scale utilities: text-scale-xs … text-scale-2xl
-     ANTI-PATTERN — these expose Tier 1 (raw scale) as Tailwind utilities so
-     the home page can render a per-scale demo row (issue #163 acceptance:
-     every scale token must be visibly consumed). Production code should use
-     semantic tokens (text-page-title, text-body, text-helper, …) which themselves now
-     reference these scales via Tier 2. Three-tier rule: components → Tier 2,
-     never Tier 1 directly. */
-  --text-scale-xs:   var(--zfbtw-scale-xs);
-  --text-scale-sm:   var(--zfbtw-scale-sm);
-  --text-scale-base: var(--zfbtw-scale-base);
-  --text-scale-md:   var(--zfbtw-scale-md);
-  --text-scale-lg:   var(--zfbtw-scale-lg);
-  --text-scale-xl:   var(--zfbtw-scale-xl);
-  --text-scale-2xl:  var(--zfbtw-scale-2xl);
-
-  /* Font-size utilities: text-page-title, text-section-title, text-body, text-helper, … */
-  --text-page-title:       var(--zfbtw-text-page-title);
-  --text-section-title:    var(--zfbtw-text-section-title);
-  --text-subsection-title: var(--zfbtw-text-subsection-title);
-  --text-body:             var(--zfbtw-text-body);
-  --text-helper:           var(--zfbtw-text-helper);
-  --text-annotation:       var(--zfbtw-text-annotation);
-
-  /* Line-height utilities: leading-tight, leading-snug, leading-relaxed */
-  --leading-tight:   var(--zfbtw-leading-tight);
-  --leading-snug:    var(--zfbtw-leading-snug);
-  --leading-relaxed: var(--zfbtw-leading-relaxed);
-
-  /* Border-radius utilities: rounded-md (maps manifest radius token) */
-  --radius-md: var(--zfbtw-radius);
-
-  /* Font-family utilities: font-mono */
-  --font-mono: var(--zfbtw-font-mono);
-}
+/* Utility token registration lives in zfb.config.ts. */
 
 /* ── Base styles ─────────────────────────────────────────────────────────── */
 /* Applied via @layer base to stay in Tailwind's layer cascade. */
@@ -532,3 +439,46 @@
 /* Root cross-fade: only the page content area animates. */
 ::view-transition-old(root) { animation: 150ms ease-in  both zfbtw-content-fade-out; }
 ::view-transition-new(root) { animation: 300ms ease-out both zfbtw-content-fade-in; }
+
+.zfbtw-tooltip-trigger { cursor: help; text-decoration: underline dotted; }
+.relative:hover > .zfbtw-tooltip-bubble { opacity: 1; }
+
+/* Retain Tailwind 4.2 preflight behavior on the existing controls. */
+@layer base {
+  :root {
+    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    --font-mono: var(--zfbtw-font-mono);
+  }
+  html { font-family: var(--font-sans); -webkit-tap-highlight-color: transparent; }
+  code, kbd, samp, pre { font-family: var(--font-mono); }
+  small { font-size: 80%; }
+  sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline; }
+  sub { bottom: -0.25em; }
+  sup { top: -0.5em; }
+  hr { color: inherit; }
+  button, input:where([type="button"], [type="reset"], [type="submit"]) { appearance: button; }
+  button, input, select, optgroup, textarea {
+    border-radius: 0;
+    background-color: transparent;
+    opacity: 1;
+  }
+  ::placeholder { opacity: 1; color: color-mix(in oklab, currentcolor 50%, transparent); }
+  ::file-selector-button {
+    box-sizing: border-box;
+    margin: 0;
+    margin-inline-end: 4px;
+    padding: 0;
+    border: 0 solid;
+    border-radius: 0;
+    background-color: transparent;
+    font: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    opacity: 1;
+    appearance: button;
+  }
+  /* Optional: keep hidden elements hidden even when a display utility is present. */
+  [hidden]:where(:not([hidden="until-found"])) { display: none !important; }
+}

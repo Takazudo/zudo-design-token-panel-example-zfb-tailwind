@@ -32,7 +32,7 @@
  */
 
 import { AppShell } from '../components/app-shell';
-import { useState } from 'preact/hooks';
+import { signal, computed } from '@takazudo/zfb/zudo-react';
 
 const BASE_PATH = '/';
 
@@ -46,16 +46,16 @@ const PALETTE_INDICES = Array.from({ length: 16 }, (_, i) => i);
  * the Easing tab's "Tab Open" semantic role updates the perceived motion live.
  */
 function EasingDemoCard() {
-  const [active, setActive] = useState(false);
+  const active = signal(false);
   return (
     <button
       type="button"
-      class={active ? 'zfbtw-easing-card is-active' : 'zfbtw-easing-card'}
-      onClick={() => setActive((v) => !v)}
+      class={computed(() => active.value ? 'zfbtw-easing-card is-active' : 'zfbtw-easing-card')}
+      on:click={() => { active.value = !active.value; }}
       aria-pressed={active}
     >
       <span class="zfbtw-easing-card-label">
-        {active ? 'Click to rest ←' : '→ Click to animate'}
+        {computed(() => active.value ? 'Click to rest ←' : '→ Click to animate')}
       </span>
     </button>
   );

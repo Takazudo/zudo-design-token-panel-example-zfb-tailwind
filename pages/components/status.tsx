@@ -67,21 +67,12 @@ interface BadgeProps {
   label: string;
 }
 
+const BADGE_CLASSES = {
+  filled: { accent: 'bg-accent text-bg', success: 'bg-success text-bg', warning: 'bg-warning text-bg', danger: 'bg-danger text-bg' },
+  outlined: { accent: 'border border-accent text-accent', success: 'border border-success text-success', warning: 'border border-warning text-warning', danger: 'border border-danger text-danger' },
+};
 function Badge({ color, variant, label }: BadgeProps) {
-  if (variant === 'filled') {
-    return (
-      // reason: badge vertical pad is below `spacing-xs`; below-token granularity is local
-      <span class={`bg-${color} text-bg px-hsp-xs py-[0.125rem] rounded-md text-helper`}>
-        {label}
-      </span>
-    );
-  }
-  return (
-    // reason: badge vertical pad is below `spacing-xs`; below-token granularity is local
-    <span class={`border border-${color} text-${color} px-hsp-xs py-[0.125rem] rounded-md text-helper`}>
-      {label}
-    </span>
-  );
+  return <span class={`${BADGE_CLASSES[variant][color]} px-hsp-xs py-[0.125rem] rounded-md text-helper`}>{label}</span>;
 }
 
 function Badges() {
@@ -182,7 +173,7 @@ function Tooltip({ text, tip }: TooltipProps) {
   return (
     <span class="relative inline-block">
       <span
-        class="underline decoration-dotted cursor-help text-accent"
+        class="zfbtw-tooltip-trigger text-accent"
       >
         {text}
       </span>
@@ -194,7 +185,7 @@ function Tooltip({ text, tip }: TooltipProps) {
       */}
       <span
         class="
-          absolute bottom-full left-1/2
+          absolute bottom-full left-[50%]
           -translate-x-1/2 mb-vsp-xs
           bg-surface text-fg border border-muted rounded-md
           px-hsp-sm py-vsp-xs
@@ -202,7 +193,7 @@ function Tooltip({ text, tip }: TooltipProps) {
           whitespace-nowrap
           opacity-0
           pointer-events-none
-          [.relative:hover_&]:opacity-100
+          zfbtw-tooltip-bubble
         "
         role="tooltip"
         // reason: tooltip opacity transition references easing-tab-open semantic

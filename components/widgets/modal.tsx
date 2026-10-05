@@ -28,24 +28,24 @@
  *   ::backdrop pseudo-element
  */
 
-import { useEffect, useRef } from 'preact/hooks';
-import { useState } from 'preact/hooks';
-import { Island, type IslandProps } from '@takazudo/zfb';
+import { getScope, signal, type Ref } from '@takazudo/zfb/zudo-react';
+import { Island } from '@takazudo/zfb';
 
 // Exported so zfb's island scanner registers it in the hydration manifest:
 // `<Island>` emits a `data-zfb-island="ModalInner"` marker (named after the
 // child component), and the runtime resolves that name only for exported
 // "use client" components reachable from pages/. (zfb >= 0.1.0-next.x)
 export function ModalInner() {
-  const [isOpen, setIsOpen] = useState(false);
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const isOpen = signal(false);
+  const scope = getScope();
+  const dialogRef: Ref<HTMLDialogElement> = { current: null };
 
-  useEffect(() => {
+  scope.effect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
     const mainEl = document.querySelector('main');
 
-    if (isOpen) {
+    if (isOpen.value) {
       dialog.showModal();
       // Apply inert to background content — dialog is in top layer,
       // unaffected by inert on its ancestor.
@@ -54,30 +54,31 @@ export function ModalInner() {
       dialog.close();
       if (mainEl) mainEl.inert = false;
     }
-  }, [isOpen]);
+    return () => { dialog.close(); if (mainEl) mainEl.inert = false; };
+  });
 
-  useEffect(() => {
-    if (!isOpen) return;
+  scope.effect(() => {
+    if (!isOpen.value) return;
 
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setIsOpen(false);
+      if (e.key === 'Escape') isOpen.value = false;
     }
 
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [isOpen]);
+  });
 
   // Sync state when dialog is closed via native Escape (browser default)
-  useEffect(() => {
+  scope.effect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
     function onCancel(e: Event) {
       e.preventDefault(); // prevent native close; we handle it ourselves
-      setIsOpen(false);
+      isOpen.value = false;
     }
     dialog.addEventListener('cancel', onCancel);
     return () => dialog.removeEventListener('cancel', onCancel);
-  }, []);
+  });
 
   return (
     <>
@@ -86,7 +87,7 @@ export function ModalInner() {
         reason: @starting-style, [open] transition, and ::backdrop pseudo-element
         cannot be targeted with inline styles or Tailwind utilities
       */}
-      <style>{`
+      <style rawHtml={`
         .widgets-modal {
           opacity: 0;
           transform: scale(0.95);
@@ -113,12 +114,12 @@ export function ModalInner() {
             display 0.2s allow-discrete,
             overlay 0.2s allow-discrete;
         }
-      `}</style>
+      `} />
 
       <button
         type="button"
         class="bg-primary text-bg px-hsp-sm py-vsp-sm rounded-md border-none cursor-pointer"
-        onClick={() => setIsOpen(true)}
+        on:click={() => { isOpen.value = true; }}
       >
         Open Modal
       </button>
@@ -135,7 +136,7 @@ export function ModalInner() {
             <button
               type="button"
               class="text-muted text-body hover:text-fg cursor-pointer border-none bg-transparent px-hsp-xs py-vsp-xs"
-              onClick={() => setIsOpen(false)}
+              on:click={() => { isOpen.value = false; }}
               aria-label="Close modal"
             >
               ✕
@@ -156,7 +157,7 @@ export function ModalInner() {
             <button
               type="button"
               class="bg-primary text-bg px-hsp-sm py-vsp-sm rounded-md border-none cursor-pointer"
-              onClick={() => setIsOpen(false)}
+              on:click={() => { isOpen.value = false; }}
             >
               Close
             </button>
@@ -170,7 +171,7 @@ export function ModalInner() {
 export function ModalDemo() {
   return (
     <Island when="visible" ssrFallback={null}>
-      {(<ModalInner />) as unknown as IslandProps['children']}
+      <ModalInner />
     </Island>
   );
 }

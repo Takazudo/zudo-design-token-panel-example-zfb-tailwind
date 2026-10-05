@@ -1,42 +1,30 @@
 # zudo-design-token-panel-example-zfb-tailwind
 
-Standalone example demonstrating [@takazudo/zdtp](https://github.com/Takazudo/zudo-design-token-panel) inside a [zfb (zudo-front-builder)](https://github.com/Takazudo/zudo-front-builder) project with **Tailwind v4 enabled** via `tailwind: { enabled: true }`.
+Standalone example demonstrating [@takazudo/zdtp](https://github.com/Takazudo/zudo-design-token-panel) inside a [zfb (zudo-front-builder)](https://github.com/Takazudo/zudo-front-builder) project with **zfb 3 and zudo-wind**.
 
-Design tokens are registered via Tailwind v4's `@theme` block so utility classes like `bg-primary`, `p-vsp-md`, and `text-body` resolve back to the panel's `--zfbtw-*` CSS custom properties.
+Design tokens are registered via `wind.tokens` in `zfb.config.ts` so utility classes like `bg-primary`, `p-vsp-md`, and `text-body` resolve back to the panel's `--zfbtw-*` CSS custom properties.
 
 Deployed to **Cloudflare Workers Static Assets** at: https://zdtp-zfb-tailwind.zudolab.dev/
 
 (Worker name and custom domain live in `wrangler.toml`; `.github/workflows/deploy.yml` publishes on push to `main` and uploads a preview version per PR.)
 
-## Sibling layout
-
-This repo uses `file:` dependencies pointing to sibling directories. The expected layout under `$HOME/repos/zdtp-ex/` is:
-
-```
-$HOME/repos/zdtp-ex/
-  zudo-design-token-panel/          <- panel package (pinned SHA)
-  zfb/                              <- zfb build tool (pinned SHA)
-  zudo-design-token-panel-example-zfb-tailwind/   <- this repo
-```
-
-The pinned SHAs are stored in `framework-pins.json` at the repo root.
-
 ## Bootstrap (fresh checkout)
 
-**Important:** `pnpm install` alone will FAIL on a fresh checkout because the sibling directories do not exist yet. Always bootstrap with:
+Use Node >=22.12 and the pinned pnpm 10.33.2:
 
 ```sh
-pnpm setup:upstream
+corepack pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm audit:wind
+pnpm build
+pnpm assert:theme-chain
 ```
 
-This command:
-1. Clones or updates both sibling repos at the pinned SHAs from `framework-pins.json`
-2. Installs zfb workspace deps (required by zfb's cargo build script)
-3. Installs the zfb CLI into `.zfb-bin/` (project-local, does not touch global `~/.cargo/bin`)
-4. Runs `pnpm install` in this consumer
-5. Runs `pnpm build` to verify the full pipeline
-
-zfb is a Rust-based build tool. The bootstrap requires `cargo` to be installed. See: https://rustup.rs/
+Dependencies resolve from npm. The host uses zudo-react; zdtp 0.5.1 remains
+an opaque, lazy, self-mounting Preact widget. Its Preact peer must remain.
+The repository name and existing route titles retain the historical Tailwind
+name. Utility tokens now reference the authored `--zfbtw-*` values through
+`--zw-*` variables; panel edits remain authoritative.
 
 ## Ports
 

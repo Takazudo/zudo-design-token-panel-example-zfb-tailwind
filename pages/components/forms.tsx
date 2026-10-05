@@ -56,7 +56,7 @@ export default function FormsPage() {
       {/* Form — SSR-only; inputs accept user input natively; no submit handler needed */}
       <form
         class="flex flex-col gap-vsp-md mt-vsp-md"
-        onSubmit={(e) => e.preventDefault()}
+        on:submit={(e) => e.preventDefault()}
       >
         {/* ── Text input ─────────────────────────────────────────────── */}
         <section class="flex flex-col gap-vsp-xs">
@@ -183,7 +183,7 @@ export default function FormsPage() {
                 <input
                   type="checkbox"
                   id={id}
-                  style={{ accentColor: 'var(--zfbtw-color-accent)' }}
+                  style={{ 'accent-color': 'var(--zfbtw-color-accent)' }}
                 />
                 {label}
               </label>
@@ -211,7 +211,7 @@ export default function FormsPage() {
                   type="radio"
                   id={id}
                   name="theme"
-                  style={{ accentColor: 'var(--zfbtw-color-accent)' }}
+                  style={{ 'accent-color': 'var(--zfbtw-color-accent)' }}
                 />
                 {label}
               </label>
@@ -237,9 +237,9 @@ export default function FormsPage() {
               type="range"
               min="0"
               max="100"
-              defaultValue="60"
+              value="60"
               class="w-full cursor-pointer"
-              style={{ accentColor: 'var(--zfbtw-color-accent)' }}
+              style={{ 'accent-color': 'var(--zfbtw-color-accent)' }}
             />
             <span class="text-helper text-muted">0 – 100</span>
           </div>
