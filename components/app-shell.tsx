@@ -23,7 +23,7 @@
  * View Transitions
  * ----------------
  * <ClientRouter /> (in <head>) emits the opt-in meta tags and global CSS for the
- * zfb-runtime SPA router. zfb 3 injects its browser activation automatically.
+ * zfb-runtime SPA router. zfb injects its browser activation automatically.
  *
  * The topbar (<header>) and sidenav (<aside>) carry `data-zfb-transition-persist`
  * so zfb's DOM byte-move keeps the same DOM nodes across soft navigations, and the
@@ -107,7 +107,7 @@ export function AppShell({ title = 'zfb + Tailwind v4 — Design Token Panel', a
           Uses `ssrFallback={null}` (the zfb equivalent of Astro's `client:only`)
           so the island's internals are NOT evaluated at SSR time.
         */}
-        <Island when="visible" ssrFallback={null}>
+        <Island when="load" ssrFallback={null}>
           <PanelMount />
         </Island>
       </body>

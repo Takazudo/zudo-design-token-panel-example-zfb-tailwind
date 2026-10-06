@@ -1,35 +1,7 @@
 @import '@takazudo/zdtp/styles.css';
 
-/*
- * `--zfbtw-*` tokens + Tailwind v4 theme registration.
- *
- * File roles
- * ----------
- * 1. Source of truth for the demo's CSS-var values. The panel rewrites these
- *    names live (in-memory :root overrides) when the user tweaks a slider.
- *    The Apply pipeline rewrites THIS FILE on disk (see scaffold.routing.json —
- *    prefix `zfbtw` → this path).
- *
- * 2. Tailwind v4 @theme registration. The @theme block below maps each
- *    --zfbtw-* raw var onto Tailwind's built-in design-system
- *    namespaces so that utility classes like `bg-primary`, `p-vsp-md`, and
- *    `text-page-title` work end-to-end.
- *
- * Tailwind v4 namespace prefix rules (critical — easy to get wrong)
- * ------------------------------------------------------------------
- * Only vars declared under the EXACT namespace prefixes below generate
- * utility classes. A var named --vsp-md generates NO utility; it must be
- * --spacing-vsp-md to generate p-vsp-md / m-vsp-md / gap-vsp-md / etc.
- *
- *   --color-*       → bg-*, text-*, border-*, fill-*, stroke-*, …
- *   --spacing-*     → p-*, m-*, gap-*, w-*, h-*, inset-*, …
- *   --text-*        → text-* (font-size); pair --text-*--line-height for lh
- *   --font-*        → font-* (font-family)
- *   --leading-*     → leading-* (line-height)
- *   --radius-*      → rounded-*
- *
- * Reference: Tailwind CSS v4 "Theme Variables" docs.
- */
+/* Authored --zfbtw-* values remain the source of truth for panel edits and
+   dev Apply. zfb.config.ts maps them to zudo-wind utility tokens. */
 
 /* ── Token declarations ──────────────────────────────────────────────────── */
 :root {
@@ -140,7 +112,7 @@
 /* Utility token registration lives in zfb.config.ts. */
 
 /* ── Base styles ─────────────────────────────────────────────────────────── */
-/* Applied via @layer base to stay in Tailwind's layer cascade. */
+/* Authored base rules remain below the generated utility layer. */
 @layer base {
   *,
   *::before,

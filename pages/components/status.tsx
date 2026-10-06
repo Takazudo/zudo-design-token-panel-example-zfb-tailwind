@@ -67,9 +67,10 @@ interface BadgeProps {
   label: string;
 }
 
+// Baseline emitted no text-success/text-warning utilities; retain their inherited foreground.
 const BADGE_CLASSES = {
   filled: { accent: 'bg-accent text-bg', success: 'bg-success text-bg', warning: 'bg-warning text-bg', danger: 'bg-danger text-bg' },
-  outlined: { accent: 'border border-accent text-accent', success: 'border border-success text-success', warning: 'border border-warning text-warning', danger: 'border border-danger text-danger' },
+  outlined: { accent: 'border border-accent text-accent', success: 'border border-success text-fg', warning: 'border border-warning text-fg', danger: 'border border-danger text-danger' },
 };
 function Badge({ color, variant, label }: BadgeProps) {
   return <span class={`${BADGE_CLASSES[variant][color]} px-hsp-xs py-[0.125rem] rounded-md text-helper`}>{label}</span>;

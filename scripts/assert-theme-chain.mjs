@@ -43,14 +43,16 @@ import { join } from "node:path";
 const CHAIN = [
   {
     utility: "gap-vsp-lg",
-    property: "gap",
+    property: "column-gap",
+    pairedProperty: "row-gap",
     themeVar: "--zw-spacing-vsp-lg",
     rawVar: "--zfbtw-vsp-lg",
     namespace: "--zw-spacing-*",
   },
   {
     utility: "px-hsp-md",
-    property: "padding-inline",
+    property: "padding-left",
+    pairedProperty: "padding-right",
     themeVar: "--zw-spacing-hsp-md",
     rawVar: "--zfbtw-hsp-md",
     namespace: "--zw-spacing-*",
@@ -127,7 +129,7 @@ function checkChain(rawCss) {
       failures.push(
         `.${row.utility} — utility rule is MISSING from the built CSS (namespace ${row.namespace}).`,
       );
-    } else if (!bodies.some((b) => declaresVar(b, row.property, row.themeVar))) {
+    } else if (!bodies.some((b) => declaresVar(b, row.property, row.themeVar) && (!row.pairedProperty || declaresVar(b, row.pairedProperty, row.themeVar)))) {
       failures.push(
         `.${row.utility} — rule exists but does not declare \`${row.property}: var(${row.themeVar})\`; ` +
           `got \`${bodies[0].trim()}\`.`,
@@ -229,6 +231,12 @@ function mangles(css) {
     );
 
   return [
+    ...CHAIN.filter(row => row.pairedProperty).flatMap(row =>
+      [row.property, row.pairedProperty].map(property => ({
+        name: `.${row.utility} ${property} removed (both axes required)`,
+        css: css.replace(new RegExp(`(\\.${escapeRe(row.utility)}\\s*\\{[^{}]*?)${escapeRe(property)}\\s*:[^;{}]+;`), "$1"),
+      })),
+    ),
     {
       name: `.${last.utility} selector renamed (missing utility)`,
       css: css.replace(selectorRe, `.${last.utility}-gone`),
@@ -248,9 +256,6 @@ function mangles(css) {
     },
     {
       name: "all checked utilities removed (the silent zfb-upgrade failure)",
-      // -1 would make slice() drop a single character, i.e. a mangle that is
-      // not a mangle. The no-op guard in the self-test loop catches that, but
-      // this says WHY rather than leaving the reader to work it out.
       css: CHAIN.reduce((result, row) => result.replace(new RegExp(`\\.${escapeRe(row.utility)}\\s*\\{[^{}]*\\}`, "g"), ""), css),
     },
   ];

@@ -99,8 +99,7 @@ export function TabsInner({ baseId }: { baseId: string }) {
       >
         <p>
           <strong>Overview panel.</strong> Indicator slides on{' '}
-          <code>easing-tab-open</code>{' '}
-          (→&nbsp;<code>--zfbtw-easing-tab-open</code>).
+          <code>easing-tab-open</code><span>{' '}</span>{'(→\u00a0'}<code>--zfbtw-easing-tab-open</code>).
         </p>
       </div>
       <div
@@ -134,7 +133,7 @@ export function TabsInner({ baseId }: { baseId: string }) {
 
 export function TabsDemo() {
   return (
-    <Island when="visible" ssrFallback={null}>
+    <Island when="load" ssrFallback={null}>
       <TabsInner baseId="zfbtw-widget-tabs" />
     </Island>
   );

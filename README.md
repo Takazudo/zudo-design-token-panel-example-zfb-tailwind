@@ -1,6 +1,6 @@
 # zudo-design-token-panel-example-zfb-tailwind
 
-Standalone example demonstrating [@takazudo/zdtp](https://github.com/Takazudo/zudo-design-token-panel) inside a [zfb (zudo-front-builder)](https://github.com/Takazudo/zudo-front-builder) project with **zfb 3 and zudo-wind**.
+Standalone example demonstrating [@takazudo/zdtp](https://github.com/Takazudo/zudo-design-token-panel) inside a [zfb (zudo-front-builder)](https://github.com/Takazudo/zudo-front-builder) project with **zfb 4 and zudo-wind**.
 
 Design tokens are registered via `wind.tokens` in `zfb.config.ts` so utility classes like `bg-primary`, `p-vsp-md`, and `text-body` resolve back to the panel's `--zfbtw-*` CSS custom properties.
 
