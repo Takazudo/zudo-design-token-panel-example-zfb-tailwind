@@ -4,17 +4,9 @@
  * PanelMount — the `"use client"` island that bootstraps the design-token
  * panel adapter inside the zfb hydration pipeline.
  *
- * zfb renders pages as server components by default. This file marks the
- * boundary between server-rendered HTML and the Preact island that runs in
- * the browser. `components/app-shell.tsx` wraps this component in
- * `<Island when="visible" ssrFallback={null}>`, so zfb emits a skip-SSR
- * placeholder at the end of `<body>` and the hydration runtime renders this
- * component into it only once an `IntersectionObserver` (threshold 0) reports
- * the placeholder on screen — never at SSR time, and, since an observer
- * callback is delivered no earlier than the first rendering pass, not before
- * first paint either. (The runtime does fall back to hydrating immediately on
- * a browser with no `IntersectionObserver` at all; that path is not the one
- * the reasoning below is about.)
+ * The adapter activates on load so the persistent header button and console
+ * API work before the visitor scrolls. zfb 2 ignored visible scheduling for
+ * skip-SSR islands; zfb 4 honors it. The widget itself stays dynamically loaded.
  *
  * Panel adapter bootstrap
  * -----------------------
@@ -30,25 +22,8 @@
  *      `configurePanel` so persisted overrides land as soon as the module
  *      resolves.
  *
- * What the eager-load gate buys in THIS host — and what it does not
- * -----------------------------------------------------------------
- * The vite-react and Next hosts run their equivalent gate from the entry
- * script, so a hit there restores the user's tweaks before the first paint
- * and the gate genuinely defends against an FOUT. That reasoning does NOT
- * transfer here. Under `when="visible"` this whole file is deferred until
- * after paint by construction, so a returning user with saved overrides
- * always sees at least one frame of stylesheet defaults. The gate cannot
- * close that window, and widening it would not help. (Switching the mount to
- * `when="load"` would, but at the cost of the panel adapter re-entering the
- * initial JS chunk on every page — deliberately not done.)
- *
- * What the gate decides here is whether the panel chunk is fetched *at all*.
- * A visitor with no panel signals never downloads it; a user who left the
- * panel open, armed a closed-shell feature, or saved overrides gets that
- * state restored on hydration without having to call a `window.zfbTw.*`
- * helper from the console. That is why the gate still has to be exhaustive:
- * a missed signal is not a cosmetic flash here, it is a feature that silently
- * never comes back.
+ * The eager-load gate restores persisted panel signals after activation.
+ * Without those signals the widget chunk loads only when explicitly opened.
  *
  * Eager-load signals come from the package, never from this file
  * -------------------------------------------------------------
@@ -71,7 +46,7 @@
  * Preact tree; this component owns no DOM of its own.
  */
 
-import { useEffect } from 'preact/hooks';
+import { getScope } from '@takazudo/zfb/zudo-react';
 import type { PanelConfig } from '@takazudo/zdtp/astro';
 import {
   EAGER_LOAD_GATE_KEY_SUFFIXES,
@@ -307,10 +282,10 @@ function mountPanel(): void {
 }
 
 export default function PanelMount() {
-  useEffect(() => {
+  getScope().onActivate(() => {
     mountPanel();
     // No cleanup: the panel adapter installs window-level state that lives
     // for the page lifetime. A teardown on unmount would be wrong.
-  }, []);
+  });
   return null;
 }

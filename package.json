@@ -3,13 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "zfb (zudo-front-builder) + Tailwind v4 example demonstrating @takazudo/zdtp — tokens registered via @theme block into Tailwind v4's design-system namespaces, showcase and prose pages styled with utility classes.",
+  "description": "zfb 4 + zudo-wind utility example demonstrating @takazudo/zdtp with authored design tokens.",
   "packageManager": "pnpm@10.33.2",
   "engines": {
     "node": ">=22.12.0"
   },
   "scripts": {
-    "predev": "rm -rf dist .zfb .zfb-build zfb-tailwind-entry-*.css",
+    "predev": "rm -rf dist .zfb .zfb-build",
     "dev": "node scripts/launch.mjs dev",
     "_dev:zfb": "node scripts/launch.mjs dev:zfb",
     "_dev:tokens-bin": "node scripts/launch.mjs dev:sidecar",
@@ -18,14 +18,14 @@
     "typecheck": "zfb check",
     "assert:theme-chain": "node scripts/assert-theme-chain.mjs --self-test",
     "test:unit": "node --test \"tests/plugin/*.test.mjs\"",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "audit:wind": "zfb wind audit --fail-on error"
   },
   "dependencies": {
     "@takazudo/zdtp": "0.5.1",
-    "@takazudo/zfb": "2.15.1",
-    "@takazudo/zfb-runtime": "2.15.1",
-    "preact": "^10.29.1",
-    "preact-render-to-string": "^6.5.0"
+    "@takazudo/zfb": "4.0.0",
+    "@takazudo/zfb-runtime": "4.0.0",
+    "preact": "^10.29.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
@@ -36,8 +36,15 @@
   },
   "pnpm": {
     "overrides": {
-      "hono": "^4.12.34"
+      "hono": "^4.12.34",
+      "miniflare>sharp": "0.35.5",
+      "miniflare>undici": "7.29.1",
+      "concurrently>shell-quote": "1.11.0"
     },
-    "onlyBuiltDependencies": ["esbuild", "sharp", "workerd"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "workerd"
+    ]
   }
 }

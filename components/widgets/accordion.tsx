@@ -44,7 +44,7 @@ export function AccordionDemo() {
         reason: ::details-content pseudo-element requires a stylesheet rule;
         inline style cannot target pseudo-elements
       */}
-      <style>{`
+      <style rawHtml={`
         .widgets-accordion {
           interpolate-size: allow-keywords;
         }
@@ -57,7 +57,7 @@ export function AccordionDemo() {
           transition: height 0.3s var(--zfbtw-easing-tab-close),
                       opacity 0.3s var(--zfbtw-easing-tab-close);
         }
-      `}</style>
+      `} />
 
       {ITEMS.map((item) => (
         <details key={item.id} class="widgets-accordion rounded-md overflow-hidden">
