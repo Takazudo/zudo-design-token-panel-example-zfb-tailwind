@@ -1,174 +1,144 @@
 /**
- * Apply-pipeline round-trip spec for the zfb-tailwind example.
+ * Apply pipeline for the ZFB + Wind example, driven through the panel UI
+ * against the built preview.
  *
- * Exercises the bin sidecar (`zdtp-server`) apply endpoint
- * directly via fetch(), proving the full bin → CSS file rewrite path.
+ * The suite serves the BUILT `dist/` through `zfb preview`, so the two halves
+ * of "Apply works" are separate facts and are asserted separately:
  *
- * Why fetch() rather than the panel's Apply button
- * ------------------------------------------------
- * Because the preview server has no `/api/dev/apply`: that route is registered
- * by `plugins/dev-apply-proxy.mjs` through zfb's `devMiddleware` hook, which
- * `zfb build`/`zfb preview` never invoke. Driving the UI here would post into
- * a 404, so the spec talks to the sidecar directly.
+ *   1. Disk: topbar trigger → Size tab → edit `--zfbtw-radius` → header Apply →
+ *      apply modal "Write 1 file" → POST /api/dev/apply (the preview server's
+ *      `previewMiddleware` in plugins/dev-apply-proxy.mjs) → zdtp-server →
+ *      `styles/global.css` rewritten. The rewritten bytes must equal the
+ *      original with exactly the one declaration line changed. Nothing is
+ *      rebuilt, so the served stylesheet must still carry the old value.
+ *   2. Browser: the same panel edit changes a visible element's computed style
+ *      through the panel's in-memory `:root` override, while the served
+ *      stylesheet (and the file on disk) stay untouched.
  *
- * NOTE — the historical reason recorded here was different, and is now stale.
- * This header used to say the panel's Apply payload carried *color* diffs only,
- * so a size token like `--zfbtw-radius` could never be applied from the UI. At
- * zdtp 0.5.1 that is no longer true: `buildApplyOverrides` emits spacing,
- * typography and size overrides too (see
- * `node_modules/@takazudo/zdtp/dist/apply/build-apply-overrides.d.ts`,
- * "Spacing / typography / size — EMITTED when the corresponding
- * `TokenOverrides` map is non-empty"). The spec below is unaffected — it never
- * went through the panel — but a UI-driven Apply spec is now buildable against
- * a `zfb dev` server, which this harness does not run. That rewrite is
- * deliberately out of scope here.
- *
- * Prerequisites
- * -------------
- *  - `zfb preview` serving the BUILT output and the `zdtp-server` sidecar,
- *    both started by playwright.config.ts's webServer via
- *    `node scripts/launch.mjs test-servers`. It must be preview, not
- *    `zfb dev`: dev injects no islands script tag, so `window.zfbTw` stays
- *    undefined (Takazudo/zudo-front-builder#377, closed — by-design; still
- *    true at zfb 2.15.1).
- *  - No port or origin is written down in this file. `scripts/ports.mjs`
- *    resolves `ZDTP_PORT` and the browser origin (from `PREVIEW_PORT`, or
- *    `BASE_URL` when the caller manages the servers), and the launcher passes
- *    the SAME origins to the sidecar's repeatable `--allow-origin`. That shared
- *    derivation is what stops the sidecar's CORS check and this POST's Origin
- *    header from drifting apart.
- *
- * Token path
- * ----------
- * `scaffold.routing.json`: { "zfbtw": "styles/global.css" }
- * The bin writes the updated token to `styles/global.css` in the repo root.
- *
- * The test restores the original token value inline, and `afterAll` restores
- * again as a safety net. Both restores ASSERT: a restore that silently failed
- * would leave `styles/global.css` dirty in the working tree and the next run
- * would compare against a corrupted baseline.
+ * The file's original bytes are captured before the tests. `afterEach` writes
+ * them back and asserts the restored file equals them byte-for-byte — it runs
+ * even when a test fails. Serial mode (plus `workers: 1` in the config) keeps
+ * any other spec from observing the file mid-rewrite.
  */
 
-import { test, expect } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
-import { BROWSER_ORIGIN, ZDTP_PORT } from '../../scripts/ports.mjs';
+import { readFile, writeFile } from 'node:fs/promises';
+import type { Page } from '@playwright/test';
+import {
+  TOKENS_PATH,
+  clickHeaderAction,
+  expect,
+  openViaHeader,
+  panelShell,
+  rootTokenValue,
+  setLengthToken,
+  test,
+} from './support';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-// styles/global.css is two levels up from tests/e2e/.
-const TOKENS_PATH = resolve(__dirname, '..', '..', 'styles', 'global.css');
+test.describe.configure({ mode: 'serial' });
 
-// When running this spec against caller-managed servers, start the sidecar the
-// same way the launcher does: `node scripts/launch.mjs dev:sidecar`, which
-// passes every origin in SIDECAR_ALLOWED_ORIGINS to --allow-origin.
-const APPLY_URL = `http://127.0.0.1:${ZDTP_PORT}/apply`;
-// reason: the sidecar compares this verbatim against its --allow-origin list,
-// which scripts/ports.mjs derives from the same BROWSER_ORIGIN.
-const ORIGIN = BROWSER_ORIGIN;
+const TARGET_VAR = '--zfbtw-radius';
+const ORIGINAL_LINE = `  ${TARGET_VAR}: 0.5rem;`;
+const APPLIED_LINE = `  ${TARGET_VAR}: 1.25rem;`;
 
-async function readTokenValue(cssVar: string): Promise<string> {
-  const css = await readFile(TOKENS_PATH, 'utf-8');
-  const escaped = cssVar.replace(/-/g, '\\-');
-  const re = new RegExp(`${escaped}:\\s*([^;]+);`);
-  const m = css.match(re);
-  if (!m) {
-    throw new Error(`Could not find ${cssVar} in ${TOKENS_PATH}`);
+let originalBytes: Buffer;
+
+test.beforeAll(async () => {
+  originalBytes = await readFile(TOKENS_PATH);
+});
+
+test.afterEach(async () => {
+  const current = await readFile(TOKENS_PATH);
+  if (!current.equals(originalBytes)) {
+    await writeFile(TOKENS_PATH, originalBytes);
   }
-  return m[1].trim();
+  const restored = await readFile(TOKENS_PATH);
+  expect(restored.equals(originalBytes), 'styles/global.css restored byte-for-byte').toBe(true);
+});
+
+/** The built stylesheet the preview server serves for the current page. */
+async function servedStylesheet(page: Page): Promise<string> {
+  const href = await page.locator('link[rel="stylesheet"][href^="/assets/"]').getAttribute('href');
+  expect(href, 'built stylesheet link').toBeTruthy();
+  const response = await page.request.get(href!);
+  expect(response.status()).toBe(200);
+  return response.text();
 }
 
-async function postApply(cssVar: string, value: string): Promise<void> {
-  const response = await fetch(APPLY_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Origin: ORIGIN,
-    },
-    body: JSON.stringify({ tokens: { [cssVar]: value } }),
-  });
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`POST /apply failed (${response.status}): ${text}`);
-  }
-}
+test('panel Apply rewrites styles/global.css on disk with exactly the edited declaration', async ({
+  page,
+}) => {
+  const originalText = originalBytes.toString('utf8');
+  expect(originalText.split(ORIGINAL_LINE)).toHaveLength(2);
+  const expectedBytes = Buffer.from(originalText.replace(ORIGINAL_LINE, APPLIED_LINE), 'utf8');
 
-test.describe('zfb-tailwind — apply pipeline round-trip', () => {
-  // Use --zfbtw-radius (0.5rem by default) as the test target.
-  // The bin sidecar accepts any CSS var, including size tokens.
-  const TARGET_VAR = '--zfbtw-radius';
-  let originalValue = '';
+  await page.goto('/');
+  await openViaHeader(page);
+  await setLengthToken(page, /^size$/i, TARGET_VAR, '1.25');
+  expect(await rootTokenValue(page, TARGET_VAR)).toBe('1.25rem');
 
-  test.beforeAll(async () => {
-    originalValue = await readTokenValue(TARGET_VAR);
-  });
+  await clickHeaderAction(page, 'apply');
+  const applyModal = page.getByRole('dialog', { name: 'Apply design tokens to codebase' });
+  const writeButton = applyModal.getByRole('button', { name: /^Write 1 file \(1 token\)$/ });
+  await expect(writeButton).toBeVisible();
+  // The modal POSTs a dry-run preview on open and keeps the button
+  // aria-disabled until it resolves.
+  await expect(writeButton).not.toHaveAttribute('aria-disabled', /.*/);
 
-  test.afterAll(async () => {
-    // Safety net for an abnormal exit: put the file back and PROVE it went
-    // back. Swallowing a failed restore here is how `styles/global.css` ends up
-    // committed with a test value in it, and how the next run's baseline is
-    // read from an already-corrupted file.
-    if (!originalValue) return;
-    await postApply(TARGET_VAR, originalValue);
-    // Poll, exactly as the in-band restore does: the sidecar's disk write is not
-    // guaranteed to be visible the instant its response lands, and a bare read
-    // here would fail the whole suite in the abnormal-exit case this hook exists
-    // for — reporting a phantom restore failure over the real error.
-    await expect
-      .poll(
-        async () => {
-          try {
-            return await readTokenValue(TARGET_VAR);
-          } catch {
-            return '';
-          }
-        },
-        { timeout: 5_000, intervals: [100, 250, 500] },
-      )
-      .toBe(originalValue);
-  });
+  const writeResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/dev/apply' &&
+      response.request().method() === 'POST' &&
+      (response.request().postDataJSON() as { dryRun?: boolean }).dryRun !== true,
+  );
+  await writeButton.click();
+  const response = await writeResponse;
+  expect(response.status()).toBe(200);
+  // Success envelope: PORTABLE-CONTRACT §5.1 "Response 200 (success)".
+  const body = (await response.json()) as {
+    ok: boolean;
+    updated: Array<{ file: string; changed: string[] }>;
+  };
+  expect(body.ok).toBe(true);
+  expect(body.updated.map(({ file, changed }) => ({ file, changed }))).toEqual([
+    { file: 'styles/global.css', changed: [TARGET_VAR] },
+  ]);
+  await expect(applyModal.getByRole('button', { name: 'Done', exact: true })).toBeVisible();
 
-  test('postApply() rewrites a token directly via the bin sidecar', async () => {
-    // Prove the bin sidecar is reachable and the /apply endpoint rewrites
-    // the target CSS variable in styles/global.css on disk.
-    const altValue = '1.25rem';
-    if (originalValue === altValue) {
-      throw new Error(
-        `Test value ${altValue} matches original — pick a different test value.`,
-      );
-    }
+  await expect
+    .poll(async () => (await readFile(TOKENS_PATH)).equals(expectedBytes), {
+      message: 'styles/global.css equals the original with only the edited line changed',
+    })
+    .toBe(true);
 
-    await postApply(TARGET_VAR, altValue);
+  // The write landed on disk only: preview keeps serving the built dist.
+  const served = await servedStylesheet(page);
+  expect(served).toMatch(/--zfbtw-radius:\s*0?\.5rem/);
+  expect(served).not.toMatch(/--zfbtw-radius:\s*1\.25rem/);
 
-    await expect
-      .poll(
-        async () => {
-          try {
-            return await readTokenValue(TARGET_VAR);
-          } catch {
-            return '';
-          }
-        },
-        { timeout: 5_000, intervals: [100, 250, 500] },
-      )
-      .toBe(altValue);
+  await applyModal.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(applyModal).toBeHidden();
+  await expect(panelShell(page)).toBeVisible();
+});
 
-    // Restore inline as well, so the file is clean the moment this test ends
-    // rather than only after the suite does.
-    await postApply(TARGET_VAR, originalValue);
+test('panel edit restyles the page through the in-memory override while dist and disk stay as built', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const link = page.locator('aside a.font-semibold');
+  await expect(link).toHaveCSS('border-top-left-radius', '8px');
 
-    await expect
-      .poll(
-        async () => {
-          try {
-            return await readTokenValue(TARGET_VAR);
-          } catch {
-            return '';
-          }
-        },
-        { timeout: 5_000, intervals: [100, 250, 500] },
-      )
-      .toBe(originalValue);
-  });
+  await openViaHeader(page);
+  await setLengthToken(page, /^size$/i, TARGET_VAR, '1.25');
+
+  await expect(link).toHaveCSS('border-top-left-radius', '20px');
+  // The value comes from the panel's inline :root override …
+  expect(
+    await page.evaluate(
+      (name) => document.documentElement.style.getPropertyValue(name).trim(),
+      TARGET_VAR,
+    ),
+  ).toBe('1.25rem');
+  // … not from a rebuilt stylesheet or a rewritten file.
+  expect(await servedStylesheet(page)).toMatch(/--zfbtw-radius:\s*0?\.5rem/);
+  expect((await readFile(TOKENS_PATH)).equals(originalBytes)).toBe(true);
 });
