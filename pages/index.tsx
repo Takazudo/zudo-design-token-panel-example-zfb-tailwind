@@ -1,6 +1,6 @@
 /**
  * Home page of the zfb-tailwind example. Renders cards / buttons / palette
- * swatches driven entirely by `--zfbtw-*` tokens via Tailwind v4
+ * swatches driven entirely by `--zfbtw-*` tokens via Wind (zudo-wind)
  * utility classes, so opening the panel and tweaking any token rewrites the
  * page in real time.
  *
@@ -64,19 +64,19 @@ function EasingDemoCard() {
 export default function HomePage() {
   return (
     <AppShell
-      title="zfb + Tailwind v4 Example — Design Token Panel"
+      title="ZFB + Wind Example — Design Token Panel"
       activePath={BASE_PATH}
     >
       {/* reason: page-content max-width is a layout constant for this demo; no structural token covers prose-container widths */}
       <div class="flex flex-col gap-vsp-lg max-w-[56rem] mx-auto">
         <header>
           <h1 class="text-page-title font-bold mb-vsp-md text-primary">
-            Live token tweaking, in zfb + Tailwind v4
+            Live token tweaking, in ZFB + Wind
           </h1>
           <p>
             Every visible element on this page is driven by a{' '}
             <code>--zfbtw-*</code> CSS custom property, consumed via
-            Tailwind v4 utility classes. Open the panel from the button above
+            Wind utility classes. Open the panel from the button above
             and drag any slider — the change applies before the next paint.
           </p>
           <p class="text-helper text-muted mt-vsp-md">

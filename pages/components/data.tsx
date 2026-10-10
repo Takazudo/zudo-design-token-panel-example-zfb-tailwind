@@ -11,7 +11,7 @@ const BASE_PATH = '/';
 export default function DataPage() {
   return (
     <AppShell
-      title="Data — zfb + Tailwind v4 — Design Token Panel"
+      title="Data — ZFB + Wind — Design Token Panel"
       activePath={`${BASE_PATH}components/data/`}
     >
       <div class="flex flex-col gap-vsp-xl">
