@@ -1,5 +1,5 @@
 /**
- * Forms demo page — zfb + Tailwind v4.
+ * Forms demo page — ZFB + Wind.
  *
  * Demonstrates all common form widget types with every colour, spacing,
  * and shape styled exclusively through Tailwind utilities that resolve to
@@ -36,7 +36,7 @@ const inputBase =
 export default function FormsPage() {
   return (
     <AppShell
-      title="Forms — zfb + Tailwind v4 — Design Token Panel"
+      title="Forms — ZFB + Wind — Design Token Panel"
       activePath={`${BASE_PATH}components/forms/`}
     >
       {/* Page heading */}
@@ -44,7 +44,7 @@ export default function FormsPage() {
 
       {/* §131.3 required intro paragraph */}
       <p class="text-body text-fg leading-relaxed mt-vsp-sm">
-        Each widget below is styled entirely with Tailwind utilities that
+        Each widget below is styled entirely with Wind utilities that
         resolve to design tokens. Inputs use <code class="font-mono text-helper">px-hsp-sm py-vsp-sm</code> for
         padding, <code class="font-mono text-helper">radius</code> for corners,{' '}
         <code class="font-mono text-helper">color-muted</code> for borders,{' '}

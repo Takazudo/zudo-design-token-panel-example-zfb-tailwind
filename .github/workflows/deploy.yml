@@ -5,6 +5,13 @@
 #             chain over the built CSS, and parse wrangler.toml. Needs no
 #             Cloudflare credentials, so a fresh clone or a fork is green
 #             immediately. This is the real correctness gate.
+#   browser — always runs (push to `main` + every PR, whatever its base) and is
+#             blocking: a change-detection step decides whether the Playwright
+#             suite runs. Content-only changes log "skipped: content-only" and
+#             pass; otherwise it builds the site, boots `zfb preview` + the
+#             zdtp-server sidecar, and fails whenever the suite fails
+#             (including a server or sidecar that does not start). Needs no
+#             credentials.
 #   deploy  — push to `main` only: `wrangler deploy` (uploads the Worker AND
 #             attaches the custom domain from wrangler.toml).
 #   preview — non-draft pull requests only: uploads a preview version, asserts the
@@ -87,11 +94,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      # Guards plugins/dev-apply-proxy.mjs's header forwarding. That proxy
-      # shipped forwarding `content-type` only, which 403s every panel-driven
-      # Apply, and no browser spec can see it (apply-roundtrip.spec.ts POSTs the
-      # sidecar directly and sets Origin itself). node:test only, no build and no
-      # browser needed, so it belongs in this credential-free gate.
+      # Guards plugins/dev-apply-proxy.mjs's header forwarding and its
+      # dev + preview registration. That proxy shipped forwarding `content-type`
+      # only, which 403s every panel-driven Apply. The browser job exercises the
+      # same path end-to-end; this node:test pins the contract with no build and
+      # no browser, so it belongs in this credential-free gate.
       - name: Unit tests
         run: pnpm test:unit
 
@@ -159,6 +166,99 @@ jobs:
             fi
           done
           echo "OK: wrangler.toml top-level keys are above [assets]; no assets-only violations."
+
+  browser:
+    name: Browser (Playwright + real Apply)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # Full history so the change-detection diff can reach the base.
+          fetch-depth: 0
+
+      - name: Detect browser-relevant changes
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            range="${PR_BASE_SHA}...${PR_HEAD_SHA}"
+          elif [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ] \
+            && git cat-file -e "${PUSH_BEFORE_SHA}^{commit}" 2>/dev/null; then
+            range="${PUSH_BEFORE_SHA}...${PUSH_SHA}"
+          else
+            echo "No comparable base for this push — running the suite."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$range")
+          echo "Changed files ($range):"
+          printf '%s\n' "$changed"
+          relevant=$(printf '%s\n' "$changed" | bash scripts/browser-relevant-changes.sh)
+          if [ -n "$relevant" ]; then
+            echo "Browser-relevant changes:"
+            printf '%s\n' "$relevant"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skipped: content-only"
+            echo "::notice::Browser suite skipped: content-only change."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup pnpm
+        if: steps.changes.outputs.run == 'true'
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+
+      - name: Setup Node.js
+        if: steps.changes.outputs.run == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        if: steps.changes.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        if: steps.changes.outputs.run == 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Record toolchain versions
+        if: steps.changes.outputs.run == 'true'
+        run: |
+          echo "Node $(node --version)"
+          echo "pnpm $(pnpm --version)"
+          pnpm exec playwright --version
+          node -e "import('@playwright/test').then(async ({ chromium }) => { const b = await chromium.launch(); console.log('Chromium ' + b.version()); await b.close(); })"
+
+      # Playwright's webServer builds the site and boots `zfb preview` and the
+      # zdtp-server sidecar (scripts/launch.mjs) with reuse disabled, and
+      # tests/e2e/global-setup.ts verifies both listeners are this checkout's.
+      - name: Run browser suite
+        if: steps.changes.outputs.run == 'true'
+        run: pnpm test:e2e
+
+      # Supplementary to the spec's own byte-exact restore assertion.
+      - name: Assert styles/global.css is unchanged after the suite
+        if: ${{ !cancelled() && steps.changes.outputs.run == 'true' }}
+        run: git diff --exit-code -- styles/global.css
+
+      - name: Upload Playwright report
+        if: ${{ failure() && steps.changes.outputs.run == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
 
   deploy:
     name: Deploy to Cloudflare Workers
@@ -359,12 +459,12 @@ jobs:
           # per-component titles all end in "— Design Token Panel", so a loose
           # substring match could pass while the wrong page is served.
           routes=(
-            "/|<title>zfb + Tailwind v4 Example — Design Token Panel</title>"
-            "/prose/|<title>Prose Demo — zfb + Tailwind v4 — Design Token Panel</title>"
-            "/components/data/|<title>Data — zfb + Tailwind v4 — Design Token Panel</title>"
-            "/components/forms/|<title>Forms — zfb + Tailwind v4 — Design Token Panel</title>"
-            "/components/status/|<title>Status — zfb + Tailwind v4 — Design Token Panel</title>"
-            "/components/widgets/|<title>Widgets — zfb + Tailwind v4 — Design Token Panel</title>"
+            "/|<title>ZFB + Wind Example — Design Token Panel</title>"
+            "/prose/|<title>Prose Demo — ZFB + Wind — Design Token Panel</title>"
+            "/components/data/|<title>Data — ZFB + Wind — Design Token Panel</title>"
+            "/components/forms/|<title>Forms — ZFB + Wind — Design Token Panel</title>"
+            "/components/status/|<title>Status — ZFB + Wind — Design Token Panel</title>"
+            "/components/widgets/|<title>Widgets — ZFB + Wind — Design Token Panel</title>"
           )
 
           for entry in "${routes[@]}"; do

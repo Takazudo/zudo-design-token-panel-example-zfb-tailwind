@@ -248,7 +248,7 @@ function Tooltips() {
 export default function StatusPage() {
   return (
     <AppShell
-      title="Status — zfb + Tailwind v4 — Design Token Panel"
+      title="Status — ZFB + Wind — Design Token Panel"
       activePath={`${BASE_PATH}components/status/`}
     >
       {/* reason: page-content max-width is a layout constant for this demo; no structural token covers prose-container widths */}

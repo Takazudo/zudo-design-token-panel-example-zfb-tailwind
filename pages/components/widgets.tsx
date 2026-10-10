@@ -22,7 +22,7 @@ const BASE_PATH = '/';
 export default function WidgetsPage() {
   return (
     <AppShell
-      title="Widgets — zfb + Tailwind v4 — Design Token Panel"
+      title="Widgets — ZFB + Wind — Design Token Panel"
       activePath={`${BASE_PATH}components/widgets/`}
     >
       {/* reason: page-content max-width is a layout constant for this demo; no structural token covers prose-container widths */}

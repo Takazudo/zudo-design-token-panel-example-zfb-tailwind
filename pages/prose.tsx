@@ -62,7 +62,7 @@ export default function ProsePage() {
 
   return (
     <AppShell
-      title="Prose Demo — zfb + Tailwind v4 — Design Token Panel"
+      title="Prose Demo — ZFB + Wind — Design Token Panel"
       activePath={`${BASE_PATH}prose/`}
     >
       {/* reason: prose-container max-width is a typography constant for readability; no structural token covers prose-container widths */}

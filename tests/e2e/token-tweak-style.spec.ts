@@ -1,355 +1,87 @@
 /**
- * Token-tweak-style spec for the zfb-tailwind example.
+ * "Change a token in the panel → a visible element's computed style updates."
  *
- * Exercises the panel's live-tweak pipeline end-to-end for three token
- * categories: font-scale, spacing, and palette color.
+ * Every edit goes through the panel UI (opened with the host's topbar
+ * trigger) and lands on the authored `--zfbtw-*` variable. Wind utilities
+ * reach it through the `--zw-*` chain zfb.config.ts registers:
  *
- * Tailwind cascade consideration
- * --------------------------------
- * zfb-tailwind re-exports spacing tokens via `@theme` so that Tailwind
- * generates utility classes:
+ *   panel → --zfbtw-vsp-lg → --zw-spacing-vsp-lg → `.gap-vsp-lg { gap }`
  *
- *   CSS var:   --zfbtw-hsp-md: 1rem
- *   @theme:    --spacing-hsp-md: var(--zfbtw-hsp-md)
- *   Utility:   px-hsp-md → padding-left/right: var(--spacing-hsp-md)
+ * so asserting the computed style of a utility-styled element proves the whole
+ * chain, not just the `:root` write. Each assertion pins the concrete value the
+ * cascade must land on rather than "it changed": a "changed" assertion passes
+ * when a value moves for an unrelated reason. The figures assume the default
+ * 16px root font size.
  *
- * The panel tweaks `--zfbtw-hsp-md` (raw var) on :root. Tailwind's
- * @theme vars (--spacing-hsp-md) cascade from the raw var, and the utility
- * classes resolve through that chain. Assertions target computed style values
- * (not var() strings) so they verify the full cascade.
- *
- * Spacing cascade assertion (acceptance criteria from sub-issue #252):
- *   1. Find an element whose gap is driven by a `gap-vsp-*` utility class
- *      (home page flex container uses `gap-vsp-lg`).
- *   2. Tweak `--zfbtw-vsp-lg` via the panel's Spacing tab.
- *   3. Assert the element's computed `gap` updates to the new value, proving:
- *      panel → --zfbtw-vsp-lg → --spacing-vsp-lg → gap-vsp-lg utility.
- *
- * Panel input selectors
- * ----------------------
- * Spacing token rows expose aria-label patterns:
- *   "--zfbtw-vsp-lg value"  → text input for the numeric value
- *   "--zfbtw-vsp-lg slider" → range slider
- * Color palette swatches are role="button" divs (tokenpanel-color-swatch-button)
- * with aria-label "--zfbtw-palette-N: #hexvalue". Tweaking via the :root CSS var
- * override mechanism is validated via computed style assertions.
- *
- * Exact computed values, not "it changed"
- * ---------------------------------------
- * Each assertion below pins the concrete px the cascade must land on rather
- * than `not.toBe(before)`. A "changed" assertion passes when a value moves for
- * an entirely unrelated reason — a layout shift, a different element matching
- * the selector — which is precisely the false-green this spec is the epic's
- * proof against. The figures assume the default 16px root font size.
- *
- * Prerequisites
- * -------------
- *  - `zfb preview` serving the BUILT output, started by playwright.config.ts's
- *    webServer. It must be preview, not `zfb dev`: dev injects no islands
- *    script tag, so `window.zfbTw` stays undefined
- *    (Takazudo/zudo-front-builder#377, closed — by-design; still true at zfb
- *    2.15.1).
- *  - Ports are not hard-coded anywhere. `scripts/ports.mjs` resolves them from
- *    `ZFB_PORT` / `ZDTP_PORT` / `PREVIEW_PORT` (or `BASE_URL`), and
- *    playwright.config.ts derives `baseURL` from the same resolver — so the
- *    relative paths below follow whatever port this worktree is on.
+ * Each test gets a fresh browser context, so no panel state leaks between
+ * tests; nothing here touches the apply sidecar or the file on disk.
  */
 
-import { test, expect } from '@playwright/test';
-import { STORAGE_PREFIX, closePanelAndClearStorage } from './panel-storage';
+import type { Page } from '@playwright/test';
+import { expect, openViaHeader, panelShell, setLengthToken, test } from './support';
 
-/** Open the page, seed localStorage, reload so the panel island boots eagerly. */
-async function openPageWithPanel(page: import('@playwright/test').Page, path: string) {
-  await page.goto(path);
-  await page.waitForLoadState('domcontentloaded');
-  // Clear open-state key to avoid leftover state from previous tests toggling the panel
-  // CLOSED instead of open (wasVisible=true but isPanelCurrentlyOpen=true → willBeOpen=false).
-  await page.evaluate((prefix) => {
-    localStorage.setItem(`${prefix}:visible`, '1');
-    localStorage.removeItem(`${prefix}-open`);
-  }, STORAGE_PREFIX);
-  await page.reload();
-  await page.waitForLoadState('domcontentloaded');
-
-  // Wait for window.zfbTw.showDesignPanel to be available.
-  await page.waitForFunction(
-    () => typeof (window as unknown as { zfbTw?: { showDesignPanel?: unknown } }).zfbTw?.showDesignPanel === 'function',
-    { timeout: 20_000 },
-  );
-
-  // Use showDesignPanel (not toggle) to always open the panel.
-  await page.evaluate(async () => {
-    const win = window as unknown as { zfbTw: { showDesignPanel: () => Promise<void> } };
-    await win.zfbTw.showDesignPanel();
-  });
-
-  // Wait for panel shell to be visible (open=true via useEffect).
-  await page.locator('.tokenpanel-shell').waitFor({ state: 'visible', timeout: 30_000 });
+async function setColorToken(page: Page, cssVar: string, hex: string): Promise<void> {
+  const shell = panelShell(page);
+  await shell.getByRole('tab', { name: /^color$/i }).click();
+  await shell.locator(`[aria-label^="${cssVar}:"]`).click();
+  const hexInput = page.locator('.tokenpanel-color-picker-hex-input');
+  await hexInput.fill(hex);
+  await hexInput.press('Enter');
 }
 
-// ---------------------------------------------------------------------------
-// Font-scale tweak
-// ---------------------------------------------------------------------------
+test('font scale: --zfbtw-scale-xs resizes .text-scale-xs text', async ({ page }) => {
+  await page.goto('/');
+  await openViaHeader(page);
+  const text = page.locator('.text-scale-xs').first();
+  await expect(text).toHaveCSS('font-size', '12px');
 
-test.describe('zfb-tailwind — token-tweak: font-scale', () => {
-  test('tweaking --zfbtw-scale-xs via value input changes computed font-size', async ({ page }) => {
-    await openPageWithPanel(page, '/');
+  await setLengthToken(page, /^font$/i, '--zfbtw-scale-xs', '0.625');
 
-    // Open the Font tab.
-    const fontTab = page.getByRole('tab', { name: /font/i });
-    await fontTab.waitFor({ state: 'visible', timeout: 10_000 });
-    await fontTab.click();
-
-    // Panel uses aria-label pattern: "--zfbtw-scale-xs value" for the number input.
-    // Default value: 0.75rem.
-    const scaleXsInput = page.getByLabel('--zfbtw-scale-xs value');
-    await scaleXsInput.waitFor({ state: 'visible', timeout: 5_000 });
-
-    // On the home page, palette swatch labels use text-annotation (→ --zfbtw-text-annotation
-    // → --zfbtw-scale-xs via the semantic tier). The raw scale row also renders
-    // `<p class="text-scale-xs text-muted">` directly consuming --zfbtw-scale-xs.
-    const xsTextEl = page.locator('.text-scale-xs').first();
-
-    // Default --zfbtw-scale-xs is 0.75rem = 12px.
-    await expect
-      .poll(async () => xsTextEl.evaluate((el) => window.getComputedStyle(el).fontSize))
-      .toBe('12px');
-
-    // 0.625rem = 10px.
-    await scaleXsInput.fill('0.625');
-    await scaleXsInput.press('Enter');
-
-    await expect
-      .poll(
-        async () => {
-          return xsTextEl.evaluate((el) => window.getComputedStyle(el).fontSize);
-        },
-        { timeout: 5_000, intervals: [100, 250, 500] },
-      )
-      .toBe('10px');
-
-    // Restore original value, and confirm the restore actually took.
-    await scaleXsInput.fill('0.75');
-    await scaleXsInput.press('Enter');
-    await expect
-      .poll(async () => xsTextEl.evaluate((el) => window.getComputedStyle(el).fontSize))
-      .toBe('12px');
-
-    await closePanelAndClearStorage(page);
-  });
+  await expect(text).toHaveCSS('font-size', '10px');
 });
 
-// ---------------------------------------------------------------------------
-// Spacing tweak — Tailwind cascade: --zfbtw-vsp-lg → --spacing-vsp-lg → gap-vsp-lg
-// ---------------------------------------------------------------------------
+test('spacing: --zfbtw-vsp-lg changes the gap-vsp-lg gap', async ({ page }) => {
+  await page.goto('/');
+  await openViaHeader(page);
+  const stack = page.locator('main .gap-vsp-lg').first();
+  await expect(stack).toHaveCSS('row-gap', '28px');
 
-test.describe('zfb-tailwind — token-tweak: spacing (Tailwind @theme cascade)', () => {
-  test('tweaking --zfbtw-vsp-lg updates computed gap on gap-vsp-lg element', async ({ page }) => {
-    await openPageWithPanel(page, '/');
+  await setLengthToken(page, /^spacing$/i, '--zfbtw-vsp-lg', '2.5');
 
-    // Open the Spacing tab.
-    const spacingTab = page.getByRole('tab', { name: /spacing/i });
-    await spacingTab.waitFor({ state: 'visible', timeout: 10_000 });
-    await spacingTab.click();
-
-    // Panel aria-label: "--zfbtw-vsp-lg value" (text number input).
-    // Default: 1.75rem.
-    const vspLgInput = page.getByLabel('--zfbtw-vsp-lg value');
-    await vspLgInput.waitFor({ state: 'visible', timeout: 5_000 });
-
-    // Home page: <div class="flex flex-col gap-vsp-lg max-w-[56rem] mx-auto">
-    // cascade: gap-vsp-lg → gap: var(--spacing-vsp-lg) → var(--zfbtw-vsp-lg) → 1.75rem
-    const gapEl = page.locator('.gap-vsp-lg').first();
-
-    // Default --zfbtw-vsp-lg is 1.75rem = 28px.
-    await expect
-      .poll(async () => gapEl.evaluate((el) => window.getComputedStyle(el).gap))
-      .toBe('28px');
-
-    // 2.5rem = 40px.
-    await vspLgInput.fill('2.5');
-    await vspLgInput.press('Enter');
-
-    // Full cascade: panel → --zfbtw-vsp-lg → --spacing-vsp-lg → gap-vsp-lg.
-    await expect
-      .poll(
-        async () => {
-          return gapEl.evaluate((el) => window.getComputedStyle(el).gap);
-        },
-        { timeout: 5_000, intervals: [100, 250, 500] },
-      )
-      .toBe('40px');
-
-    // Restore, and confirm the restore actually took.
-    await vspLgInput.fill('1.75');
-    await vspLgInput.press('Enter');
-    await expect
-      .poll(async () => gapEl.evaluate((el) => window.getComputedStyle(el).gap))
-      .toBe('28px');
-
-    await closePanelAndClearStorage(page);
-  });
-
-  test('tweaking --zfbtw-hsp-md updates computed padding on px-hsp-md element', async ({ page }) => {
-    await openPageWithPanel(page, '/');
-
-    // Open the Spacing tab.
-    const spacingTab = page.getByRole('tab', { name: /spacing/i });
-    await spacingTab.waitFor({ state: 'visible', timeout: 10_000 });
-    await spacingTab.click();
-
-    // Panel aria-label: "--zfbtw-hsp-md value". Default: 1rem.
-    const hspMdInput = page.getByLabel('--zfbtw-hsp-md value');
-    await hspMdInput.waitFor({ state: 'visible', timeout: 5_000 });
-
-    // Home page cards use `px-hsp-md`:
-    //   px-hsp-md → padding-inline: var(--spacing-hsp-md) → var(--zfbtw-hsp-md) → 1rem
-    const cardEl = page.locator('.px-hsp-md').first();
-
-    // Default --zfbtw-hsp-md is 1rem = 16px.
-    await expect
-      .poll(async () => cardEl.evaluate((el) => window.getComputedStyle(el).paddingLeft))
-      .toBe('16px');
-
-    // 2rem = 32px.
-    await hspMdInput.fill('2');
-    await hspMdInput.press('Enter');
-
-    await expect
-      .poll(
-        async () => {
-          return cardEl.evaluate((el) => window.getComputedStyle(el).paddingLeft);
-        },
-        { timeout: 5_000, intervals: [100, 250, 500] },
-      )
-      .toBe('32px');
-
-    // Restore, and confirm the restore actually took.
-    await hspMdInput.fill('1');
-    await hspMdInput.press('Enter');
-    await expect
-      .poll(async () => cardEl.evaluate((el) => window.getComputedStyle(el).paddingLeft))
-      .toBe('16px');
-
-    await closePanelAndClearStorage(page);
-  });
+  await expect(stack).toHaveCSS('row-gap', '40px');
+  await expect(stack).toHaveCSS('column-gap', '40px');
 });
 
-// ---------------------------------------------------------------------------
-// Palette color tweak
-// ---------------------------------------------------------------------------
+test('spacing: --zfbtw-hsp-md changes the px-hsp-md padding', async ({ page }) => {
+  await page.goto('/');
+  await openViaHeader(page);
+  const padded = page.locator('.px-hsp-md').first();
+  await expect(padded).toHaveCSS('padding-left', '16px');
 
-test.describe('zfb-tailwind — token-tweak: palette color', () => {
-  test('tweaking --zfbtw-palette-0 via :root override changes computed background on swatch', async ({ page }) => {
-    await openPageWithPanel(page, '/');
+  await setLengthToken(page, /^spacing$/i, '--zfbtw-hsp-md', '2');
 
-    // Open the Color tab.
-    const colorTab = page.getByRole('tab', { name: /color/i });
-    await colorTab.waitFor({ state: 'visible', timeout: 10_000 });
-    await colorTab.click();
+  await expect(padded).toHaveCSS('padding-left', '32px');
+  await expect(padded).toHaveCSS('padding-right', '32px');
+});
 
-    // The panel sets :root overrides directly when tweaking tokens.
-    // Read the current value of --zfbtw-palette-0 from :root (default: #1e1e1e).
-    const beforeColor = await page.evaluate(() => {
-      return window.getComputedStyle(document.documentElement)
-        .getPropertyValue('--zfbtw-palette-0').trim();
-    });
+test('color: --zfbtw-palette-1 repaints the text-primary page title', async ({ page }) => {
+  await page.goto('/');
+  await openViaHeader(page);
+  const title = page.locator('main h1.text-primary').first();
+  await expect(title).toHaveCSS('color', 'rgb(45, 108, 223)');
 
-    // The home page renders palette swatches with inline style:
-    //   style="background: var(--zfbtw-palette-0); ..."
-    const swatch0 = page.locator('[style*="--zfbtw-palette-0"]').first();
-    const beforeBg = await swatch0.evaluate((el) => {
-      return window.getComputedStyle(el).backgroundColor;
-    });
+  await setColorToken(page, '--zfbtw-palette-1', '#ff0000');
 
-    // Tweak via the panel's color swatch button — click to open the color picker,
-    // then set a known hex value via the hex input in the picker.
-    // The swatch button for palette-0 has aria-label "--zfbtw-palette-0: #1e1e1e".
-    const swatch0Btn = page.locator('.tokenpanel-color-swatch-button').first();
-    await swatch0Btn.waitFor({ state: 'visible', timeout: 5_000 });
-    await swatch0Btn.click();
+  await expect(title).toHaveCSS('color', 'rgb(255, 0, 0)');
+});
 
-    // Wait for the color picker to appear and find the hex input.
-    // The color picker renders a hex input with class tokenpanel-colorpicker-hex-input
-    // or similar. Check for an input inside the color picker.
-    // The color picker's hex input has class "tokenpanel-color-picker-hex-input"
-    // and aria-label "Hex color value".
-    const hexInput = page.locator('.tokenpanel-color-picker-hex-input').first();
-    await hexInput.waitFor({ state: 'visible', timeout: 5_000 });
+test('color: --zfbtw-palette-0 repaints its home-page swatch', async ({ page }) => {
+  await page.goto('/');
+  await openViaHeader(page);
+  const swatch = page.locator('main [style*="--zfbtw-palette-0)"]').first();
+  await expect(swatch).toHaveCSS('background-color', 'rgb(30, 30, 30)');
 
-    // Fill in a clearly different color. The hex input requires "#RRGGBB" format
-    // to trigger the color commit via handleHexChange.
-    await hexInput.fill('#ee1111');
-    // Trigger the input event by pressing a key to re-fire onChange.
-    await hexInput.dispatchEvent('input');
+  await setColorToken(page, '--zfbtw-palette-0', '#ee1111');
 
-    // Assert the CSS variable on :root changed.
-    await expect
-      .poll(
-        async () => {
-          return page.evaluate(() =>
-            window.getComputedStyle(document.documentElement)
-              .getPropertyValue('--zfbtw-palette-0').trim(),
-          );
-        },
-        { timeout: 5_000, intervals: [100, 250, 500] },
-      )
-      .not.toBe(beforeColor);
-
-    // Assert the swatch computed background changed.
-    const afterBg = await swatch0.evaluate((el) => window.getComputedStyle(el).backgroundColor);
-    expect(afterBg).not.toBe(beforeBg);
-
-    // Close the color picker by clicking outside.
-    await page.keyboard.press('Escape');
-
-    await closePanelAndClearStorage(page);
-  });
-
-  test('--zfbtw-palette-1 CSS var on :root reflects panel tweak', async ({ page }) => {
-    await openPageWithPanel(page, '/');
-
-    // Open the Color tab.
-    const colorTab = page.getByRole('tab', { name: /color/i });
-    await colorTab.waitFor({ state: 'visible', timeout: 10_000 });
-    await colorTab.click();
-
-    // Read initial value of --zfbtw-palette-1 (default: #2d6cdf).
-    const beforeColor = await page.evaluate(() => {
-      return window.getComputedStyle(document.documentElement)
-        .getPropertyValue('--zfbtw-palette-1').trim();
-    });
-
-    // Click the second swatch button (palette-1).
-    const swatch1Btn = page.locator('.tokenpanel-color-swatch-button').nth(1);
-    await swatch1Btn.waitFor({ state: 'visible', timeout: 5_000 });
-    await swatch1Btn.click();
-
-    // Find the hex input in the color picker.
-    // The color picker's hex input has class "tokenpanel-color-picker-hex-input"
-    // and aria-label "Hex color value".
-    const hexInput = page.locator('.tokenpanel-color-picker-hex-input').first();
-    await hexInput.waitFor({ state: 'visible', timeout: 5_000 });
-
-    // Set to a clearly different color. The hex input requires "#RRGGBB" format.
-    await hexInput.fill('#ff0044');
-    await hexInput.dispatchEvent('input');
-
-    // Assert the CSS var on :root changed.
-    await expect
-      .poll(
-        async () => {
-          return page.evaluate(() =>
-            window.getComputedStyle(document.documentElement)
-              .getPropertyValue('--zfbtw-palette-1').trim(),
-          );
-        },
-        { timeout: 5_000, intervals: [100, 250, 500] },
-      )
-      .not.toBe(beforeColor);
-
-    await page.keyboard.press('Escape');
-
-    await closePanelAndClearStorage(page);
-  });
+  await expect(swatch).toHaveCSS('background-color', 'rgb(238, 17, 17)');
 });

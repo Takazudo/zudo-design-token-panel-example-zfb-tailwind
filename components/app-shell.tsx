@@ -51,7 +51,7 @@ interface AppShellProps {
   children: Child;
 }
 
-export function AppShell({ title = 'zfb + Tailwind v4 — Design Token Panel', activePath = BASE_PATH, children }: AppShellProps) {
+export function AppShell({ title = 'ZFB + Wind — Design Token Panel', activePath = BASE_PATH, children }: AppShellProps) {
   return (
     <html lang="en">
       <head>

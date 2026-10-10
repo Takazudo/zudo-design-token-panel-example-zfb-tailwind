@@ -1,11 +1,12 @@
 /**
  * Regression test for the dev-apply-proxy's header forwarding.
  *
- * No browser-driven spec can cover this. `tests/e2e/apply-roundtrip.spec.ts`
- * POSTs the sidecar directly and sets `Origin` itself, so it stays green while
- * the proxy drops the header — which is exactly how the proxy shipped with
- * `content-type` as the only forwarded header, 403-ing every panel-driven
- * Apply regardless of what `--allow-origin` was configured with.
+ * The proxy shipped with `content-type` as the only forwarded header, 403-ing
+ * every panel-driven Apply regardless of what `--allow-origin` was configured
+ * with. `tests/e2e/apply-roundtrip.spec.ts` now drives the panel's Apply button
+ * through this proxy under `zfb preview`, but this test pins the header
+ * contract without a build or a browser, so it stays in the credential-free
+ * `build` CI job.
  *
  * Run with: pnpm test:unit
  */
@@ -16,14 +17,14 @@ import assert from 'node:assert/strict';
 import plugin from '../../plugins/dev-apply-proxy.mjs';
 import { ZDTP_PORT } from '../../scripts/ports.mjs';
 
-/** Drive `devMiddleware` with a fake ctx and hand back the registered handler. */
-function captureHandler() {
+/** Drive one middleware hook with a fake ctx and hand back the registered handler. */
+function captureHandler(hook = 'devMiddleware') {
   const registered = new Map();
   const ctx = {
     register: (route, handler) => registered.set(route, handler),
     logger: { error: () => {}, warn: () => {}, info: () => {} },
   };
-  plugin.devMiddleware(ctx);
+  plugin[hook](ctx);
   const handler = registered.get('/api/dev/apply');
   assert.ok(handler, 'plugin registered no handler at /api/dev/apply');
   return handler;
@@ -93,6 +94,26 @@ test('rejects non-POST without touching the sidecar', async () => {
     const response = await handler({ method: 'GET', headers: {}, body: '' });
     assert.equal(response.status, 405);
     assert.equal(calls.length, 0);
+  } finally {
+    restore();
+  }
+});
+
+test('registers the apply route for zfb preview as well as zfb dev', async () => {
+  // The browser suite drives the built site through `zfb preview`; without the
+  // previewMiddleware registration the panel's Apply posts into a 404 there.
+  assert.equal(plugin.previewMiddleware, plugin.devMiddleware);
+  const handler = captureHandler('previewMiddleware');
+  const { calls, restore } = stubFetch();
+  try {
+    const response = await handler({
+      method: 'POST',
+      headers: { origin: 'http://localhost:4173', 'content-type': 'application/json' },
+      body: '{"tokens":{}}',
+    });
+    assert.equal(response.status, 200);
+    assert.equal(calls[0].url, `http://127.0.0.1:${ZDTP_PORT}/apply`);
+    assert.equal(calls[0].init.headers.origin, 'http://localhost:4173');
   } finally {
     restore();
   }
