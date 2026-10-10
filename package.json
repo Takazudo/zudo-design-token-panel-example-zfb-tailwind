@@ -23,8 +23,8 @@
   },
   "dependencies": {
     "@takazudo/zdtp": "0.5.1",
-    "@takazudo/zfb": "4.0.0",
-    "@takazudo/zfb-runtime": "4.0.0",
+    "@takazudo/zfb": "4.3.0",
+    "@takazudo/zfb-runtime": "4.3.0",
     "preact": "^10.29.1"
   },
   "devDependencies": {
