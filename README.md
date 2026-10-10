@@ -172,3 +172,4 @@ With `base: '/'`, the dev-apply-proxy plugin registers at the bare path `/api/de
 The plugin registers that route under both `devMiddleware` (`pnpm dev`) and `previewMiddleware` (`pnpm preview`), so Apply works against either local server. Neither hook runs during `zfb build`, so the deployed site has no apply endpoint.
 
 This differs from the monorepo version (pre-2026-05-19) where `base` was `/pj/zudo-design-token-panel/examples/zfb-tailwind/` and the full prefixed path was required. See `plugins/dev-apply-proxy.mjs` and `config/panel-config.ts` for the historical context.
+
