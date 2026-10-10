@@ -7,7 +7,7 @@
 #             immediately. This is the real correctness gate.
 #   deploy  — push to `main` only: `wrangler deploy` (uploads the Worker AND
 #             attaches the custom domain from wrangler.toml).
-#   preview — pull requests only: uploads a preview version, asserts the
+#   preview — non-draft pull requests only: uploads a preview version, asserts the
 #             preview actually serves the expected routing matrix, and
 #             comments its URL on the PR. Uses `wrangler versions upload`,
 #             which does NOT touch routes, so previews never publish to the
@@ -34,6 +34,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -206,10 +207,10 @@ jobs:
   preview:
     name: Preview deploy
     needs: build
-    # Fork PRs never receive repository secrets, so a preview could only fail
-    # there. Skip the job outright rather than letting it run and self-skip.
+    # Draft validation must not publish a preview. Forks have no deploy secrets.
     if: >-
       github.event_name == 'pull_request' &&
+      github.event.pull_request.draft == false &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
