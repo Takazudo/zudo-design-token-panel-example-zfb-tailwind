@@ -54,7 +54,7 @@ const targets = {
     bin('zdtp-server'),
     [
       '--write-root', '.',
-      '--routing', 'scaffold.routing.json',
+      '--routing', 'missing.routing.json',
       '--port', String(ZDTP_PORT),
       ...SIDECAR_ALLOWED_ORIGINS.flatMap((origin) => ['--allow-origin', origin]),
     ],
