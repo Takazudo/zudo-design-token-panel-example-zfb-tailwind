@@ -20,10 +20,13 @@ pnpm build
 pnpm assert:theme-chain
 ```
 
-Dependencies resolve from npm. The host uses zudo-react; zdtp 0.8.6 is an
-opaque, lazy, self-mounting widget that owns its Preact runtime and injects its
+Dependencies resolve from npm. The host uses zudo-react; zdtp is an opaque,
+lazy, self-mounting widget that renders with its own bundled copy of zfb's
+zudo-react runtime (since zdtp 0.9.0 it no longer uses Preact) and injects its
 own stylesheet, so the host declares no `preact` dependency and imports no
-panel CSS. The repository name keeps the historical Tailwind name; the route
+panel CSS. The panel's optional peer `@takazudo/zfb ^5.1.2` matters only to
+consumers of its static dashboard, which this example does not use; this host
+stays on ZFB 4.3.0, so pnpm may print an unmet optional-peer warning for it. The repository name keeps the historical Tailwind name; the route
 titles say ZFB + Wind. Wind utility tokens reference the authored `--zfbtw-*`
 values through `--zw-*` variables; panel edits remain authoritative.
 
@@ -155,6 +158,12 @@ What the suite covers:
   swaps: a `window` marker survives and `zfb:after-swap` fires once per
   navigation. Panel visibility and token edits persist across swaps, history
   and reload, and the page always holds exactly one panel instance.
+- **Panel build provenance** (`tests/e2e/support.ts`, every open). The
+  mounted `.tokenpanel-shell` carries `data-zdtp-version` — the version from
+  the package.json of the zdtp build that created it. The suite reads the
+  installed `node_modules/@takazudo/zdtp/package.json` at test time and
+  requires an exact match. To check by hand, open the panel and run
+  `document.querySelector('.tokenpanel-shell').dataset.zdtpVersion`.
 - **Token edits** (`token-tweak-style.spec.ts`). Font, spacing and color edits
   made in the panel reach the computed style of Wind-utility elements.
 - **Errors.** Every test fails on any console error, page error, failed request
@@ -164,6 +173,7 @@ CI runs the suite in the blocking `Browser (Playwright + real Apply)` job of
 `.github/workflows/deploy.yml` on every pull request and on push to `main`.
 Content-only changes (`*.md` / `*.mdx` and other paths outside
 `scripts/browser-relevant-changes.sh`) log `skipped: content-only` and pass.
+The production deploy needs both the `build` and the `browser` job to succeed.
 
 ## Apply endpoint
 

@@ -7,7 +7,7 @@ settings:
 overrides:
   hono: ^4.12.34
   miniflare>sharp: 0.35.5
-  miniflare>undici: 7.29.1
+  miniflare>undici: 7.30.1
   concurrently>shell-quote: 1.11.0
 
 importers:
@@ -15,8 +15,8 @@ importers:
   .:
     dependencies:
       '@takazudo/zdtp':
-        specifier: 0.8.6
-        version: 0.8.6
+        specifier: 0.9.1
+        version: 0.9.1(@takazudo/zfb@4.3.0)
       '@takazudo/zfb':
         specifier: 4.3.0
         version: 4.3.0
@@ -444,10 +444,15 @@ packages:
   '@tailwindcss/browser@4.3.2':
     resolution: {integrity: sha512-R6hewP9HHwLAY88bFkgAYFIQMRGi9bqx6sR1anI3IThTJtwhPlAm4aHIzDKrnJ8Ct4M3d5A9PCsah8Z5+EjLiQ==}
 
-  '@takazudo/zdtp@0.8.6':
-    resolution: {integrity: sha512-powstLG6d4tkEroYbT6iAJk1Da4xAYS8+enW/bcn6IupkzQQf3agAtXrlJ8XVoWs43puOsCR5/hgpMDFKP3d3g==}
+  '@takazudo/zdtp@0.9.1':
+    resolution: {integrity: sha512-qm7whjw99qXR9NxB7OrMB1IiIFnw3Nl8SgjLWKYqltxCRMFjh6eyNNj3JYevtD1WnNIG5qsDuUS7H12BRD/ufA==}
     engines: {node: '>=22.0.0', pnpm: '>=10.0.0'}
     hasBin: true
+    peerDependencies:
+      '@takazudo/zfb': ^5.1.2
+    peerDependenciesMeta:
+      '@takazudo/zfb':
+        optional: true
 
   '@takazudo/zfb-darwin-arm64@4.3.0':
     resolution: {integrity: sha512-DboIy0U+WBeqCFzsrDRk9OfdkRXQazgk/JDb+qPUO6281TJNPtP8y3g5p3iLzozHiGDcdGV2y9wnzoErtIK8CQ==}
@@ -600,9 +605,6 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  preact@10.29.2:
-    resolution: {integrity: sha512-7tNmwg/7mzzAoB/8kSg6Hl37JraAZw3Z3A0JSY7VXlZwo82Xn0G7wKbNNs2qoF4ZEEsQGTwDAroNdqKs1ofJxQ==}
-
   require-directory@2.1.1:
     resolution: {integrity: sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==}
     engines: {node: '>=0.10.0'}
@@ -666,8 +668,8 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
-  undici@7.29.1:
-    resolution: {integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==}
+  undici@7.30.1:
+    resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
     engines: {node: '>=20.18.1'}
 
   unenv@2.0.0-rc.24:
@@ -971,12 +973,13 @@ snapshots:
 
   '@tailwindcss/browser@4.3.2': {}
 
-  '@takazudo/zdtp@0.8.6':
+  '@takazudo/zdtp@0.9.1(@takazudo/zfb@4.3.0)':
     dependencies:
       '@tailwindcss/browser': 4.3.2
       culori: 4.0.2
-      preact: 10.29.2
       tailwind-merge: 3.6.0
+    optionalDependencies:
+      '@takazudo/zfb': 4.3.0
 
   '@takazudo/zfb-darwin-arm64@4.3.0':
     optional: true
@@ -1109,7 +1112,7 @@ snapshots:
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       sharp: 0.35.5(@types/node@22.19.19)
-      undici: 7.29.1
+      undici: 7.30.1
       workerd: 1.20260903.1
       ws: 8.21.0
       youch: 4.1.0-beta.10
@@ -1129,8 +1132,6 @@ snapshots:
       playwright-core: 1.60.0
     optionalDependencies:
       fsevents: 2.3.2
-
-  preact@10.29.2: {}
 
   require-directory@2.1.1: {}
 
@@ -1205,7 +1206,7 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  undici@7.29.1: {}
+  undici@7.30.1: {}
 
   unenv@2.0.0-rc.24:
     dependencies:
