@@ -8,7 +8,7 @@
  *
  * `paletteCssVarTemplate` is the only knob that decides the per-slot var name.
  * The cluster is JSON-serializable end-to-end so it round-trips through the
- * Preact island JSON boundary.
+ * zudo-react island JSON boundary.
  */
 
 import type { ColorClusterConfig as ColorClusterDataConfig } from '@takazudo/zdtp/astro';

@@ -43,7 +43,7 @@
  * stale that way again.
  *
  * Returns `null` — the panel adapter appends its own DOM root outside the
- * Preact tree; this component owns no DOM of its own.
+ * host component tree; this component owns no DOM of its own.
  */
 
 import { getScope } from '@takazudo/zfb/zudo-react';
